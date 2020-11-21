@@ -6,8 +6,8 @@ package deerBase;
  * more or less command line output to be turned on.
  * <p>
  * Change the value of the DEBUG_LEVEL constant using a system property:
- * simpledb.Debug. For example, on the command line, use -Dsimpledb.Debug=x,
- * or simply -Dsimpledb.Debug to enable it at level 0.
+ * deerBase.Debug. For example, on the command line, use -DdeerBase.Debug=x,
+ * or simply -DdeerBase.Debug to enable it at level 0.
  * The log(level, message, ...) method will print to standard output if the
  * level number is less than or equal to the currently set DEBUG_LEVEL.
  */
@@ -15,7 +15,7 @@ package deerBase;
 public class Debug {
   private static final int DEBUG_LEVEL;
   static {
-      String debug = System.getProperty("simpledb.Debug");
+      String debug = System.getProperty("deerBase.Debug");
       if (debug == null) {
           // No system property = disabled
           DEBUG_LEVEL = -1;

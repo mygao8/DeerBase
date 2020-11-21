@@ -88,12 +88,12 @@ public class Tuple implements Serializable {
      * @param i
      *            field index to return. Must be a valid index.
      */
-    public Field getField(int i) {
+    public Field getField(int fieldIdx) {
         // some code goes here
-    	if (i < 0 || i >= this.fields.length) {
+    	if (fieldIdx < 0 || fieldIdx >= this.fields.length) {
     		throw new IllegalArgumentException("index out of bound");
     	}
-        return this.fields[i];
+        return this.fields[fieldIdx];
     }
 
     /**

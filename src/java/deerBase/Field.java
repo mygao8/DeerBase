@@ -3,7 +3,7 @@ package deerBase;
 import java.io.*;
 
 /**
- * Interface for values of fields in tuples in SimpleDB.
+ * Interface for values of fields in tuples in DeerBase.
  */
 public interface Field extends Serializable{
     /**

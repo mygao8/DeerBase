@@ -156,7 +156,7 @@ public class BufferPool {
     /**
      * Flush all dirty pages to disk.
      * NB: Be careful using this routine -- it writes dirty data to disk so will
-     *     break simpledb if running in NO STEAL mode.
+     *     break deerBase if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
         // some code goes here

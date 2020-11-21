@@ -6,7 +6,7 @@ import java.util.ArrayList;
 /**
  * HeapFileEncoder reads a comma delimited text file or accepts
  * an array of tuples and converts it to
- * pages of binary data in the appropriate format for simpledb heap pages
+ * pages of binary data in the appropriate format for deerBase heap pages
  * Pages are padded out to a specified length, and written consecutive in a
  * data file.
  */

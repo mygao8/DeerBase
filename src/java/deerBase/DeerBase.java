@@ -77,7 +77,7 @@ public class DeerBase {
             
             try {
                 //dynamically load Parser -- if it doesn't exist, print error message
-                Class<?> c = Class.forName("simpledb.Parser");
+                Class<?> c = Class.forName("deerBase.Parser");
                 Class<?> s = String[].class;
                 
                 java.lang.reflect.Method m = c.getMethod("main", s);

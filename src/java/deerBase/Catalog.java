@@ -47,7 +47,6 @@ public class Catalog {
      * @param pkeyField the name of the primary key field
      */
     public void addTable(DbFile file, String name, String pkeyField) {
-        // some code goes here
         if (name == null || pkeyField == null) {
             throw new IllegalArgumentException();
         }
@@ -98,7 +97,6 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public TupleDesc getTupleDesc(int tableId) throws NoSuchElementException {
-        // some code goes here
     	if (!dbFileMap.containsKey(tableId)) {
     		throw new NoSuchElementException();
     	}
@@ -116,7 +114,6 @@ public class Catalog {
      *     function passed to addTable
      */
     public DbFile getDbFile(int tableId) throws NoSuchElementException {
-        // some code goes here
     	if (!dbFileMap.containsKey(tableId)) {
     		throw new NoSuchElementException();
     	}
@@ -124,7 +121,6 @@ public class Catalog {
     }
 
     public String getPrimaryKey(int tableId) {
-        // some code goes here
         if (!pKeyMap.containsKey(tableId)) {
     		throw new NoSuchElementException();
     	}
@@ -132,12 +128,10 @@ public class Catalog {
     }
 
     public Iterator<Integer> tableIdIterator() {
-        // some code goes here
         return name2idMap.values().iterator();
     }
 
     public String getTableName(int id) {
-        // some code goes here
         if (!nameMap.containsKey(id)) {
     		throw new NoSuchElementException();
     	}
@@ -146,7 +140,6 @@ public class Catalog {
     
     /** Delete all tables from the catalog */
     public void clear() {
-        // some code goes here
     	name2idMap.clear();
     	dbFileMap.clear();
     	pKeyMap.clear();

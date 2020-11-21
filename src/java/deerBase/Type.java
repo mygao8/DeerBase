@@ -7,7 +7,7 @@ import deerBase.StringField;
 import java.io.*;
 
 /**
- * Class representing a type in SimpleDB.
+ * Class representing a type in DeerBase.
  * Types are static objects defined by this class; hence, the Type
  * constructor is private.
  */
