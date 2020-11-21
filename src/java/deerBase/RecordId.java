@@ -1,0 +1,75 @@
+package deerBase;
+
+import java.io.Serializable;
+
+/**
+ * A RecordId is a reference to a specific tuple on a specific page of a
+ * specific table.
+ */
+public class RecordId implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    private PageId pId;
+    private int tupleNo;
+    
+    /**
+     * Creates a new RecordId referring to the specified PageId and tuple
+     * number.
+     * 
+     * @param pid
+     *            the pageid of the page on which the tuple resides
+     * @param tupleno
+     *            the tuple number within the page.
+     */
+    public RecordId(PageId pid, int tupleNo) {
+        this.pId = pid;
+        this.tupleNo = tupleNo;
+    }
+
+    /**
+     * @return the tuple number this RecordId references.
+     */
+    public int getTupleNo() {
+    	return this.tupleNo;
+    }
+
+    /**
+     * @return the page id this RecordId references.
+     */
+    public PageId getPageId() {
+    	return this.pId;
+    }
+
+    /**
+     * Two RecordId objects are considered equal if they represent the same
+     * tuple.
+     * 
+     * @return True if this and o represent the same tuple
+     */
+    @Override
+    public boolean equals(Object o) {
+    	if (o == this) {
+    		return true;
+    	} else if (o instanceof RecordId) {
+    		RecordId anotheRecordId = (RecordId) o;
+    		return (this.pId.equals(anotheRecordId.getPageId())
+    				&& this.tupleNo == anotheRecordId.getTupleNo());
+    	} else {
+    		return false;
+    	}
+    }
+
+    /**
+     * You should implement the hashCode() so that two equal RecordId instances
+     * (with respect to equals()) have the same hashCode().
+     * 
+     * @return An int that is the same for equal RecordId objects.
+     */
+    @Override
+    public int hashCode() {
+    	int lenTupleNo = (tupleNo + "").length();
+    	return pId.hashCode() * (int) Math.pow(10.0, lenTupleNo) + tupleNo;
+    }
+
+}
