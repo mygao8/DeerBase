@@ -10,9 +10,8 @@ public class TupleDesc implements Serializable {
 
     private static final long serialVersionUID = 1L;
     
-	private int numFields;	
+	private int numFields;
 	private TDItem[] TDItemAr;
-	private Map<String, Integer> TDItemMap;
 	
     /**
      * A help class to facilitate organizing the information of each field
@@ -81,7 +80,6 @@ public class TupleDesc implements Serializable {
      *            be null.
      */
     public TupleDesc(Type[] typeAr, String[] fieldNameAr) {
-        // some code goes here
 		if (typeAr.length == 0) {
 		    throw new IllegalArgumentException("typeAr must contain at least one entry.");
 		}
@@ -91,11 +89,9 @@ public class TupleDesc implements Serializable {
 		
     	this.numFields = typeAr.length;
     	this.TDItemAr = new TDItem[this.numFields];
-    	this.TDItemMap = new HashMap<String, Integer>();
     	
     	for (int i = 0; i < this.numFields; i++) {
     		TDItemAr[i] = new TDItem(typeAr[i], fieldNameAr[i]);
-    		TDItemMap.put(fieldNameAr[i], i);
     	}
     }
 
@@ -115,20 +111,18 @@ public class TupleDesc implements Serializable {
     /**
      * private constructor only used for merging two TupleDesc objects
      */
-    private TupleDesc(int numFields, TDItem[] TDItemAr, Map<String, Integer> TDItemMap) {
+    private TupleDesc(int numFields, TDItem[] TDItemAr) {
     	if (TDItemAr == null || TDItemAr.length == 0) {
     		throw new IllegalArgumentException("TupleDesc must contain at least one entry.");
     	}
     	this.TDItemAr = TDItemAr;
     	this.numFields = numFields;
-    	this.TDItemMap = TDItemMap;
     }
 
     /**
      * @return the number of fields in this TupleDesc
      */
     public int numFields() {
-        // some code goes here
         return this.numFields;
     }
 
@@ -142,7 +136,6 @@ public class TupleDesc implements Serializable {
      *             if i is not a valid field reference.
      */
     public String getFieldName(int i) throws NoSuchElementException {
-        // some code goes here
     	if (i < 0 || i >= this.numFields) {
     		throw new NoSuchElementException();
     	}
@@ -177,12 +170,16 @@ public class TupleDesc implements Serializable {
      *             if no field with a matching name is found.
      */
     public int fieldNameToIndex(String name) throws NoSuchElementException {
-        // some code goes here
-    	Integer res = TDItemMap.get(name);
-    	if (null == res) {
-    		throw new NoSuchElementException();
-    	}
-        return res.intValue();
+        if (name == null) {
+            throw new NoSuchElementException();
+        }
+        String fieldName;
+        for (int i = 0; i < TDItemAr.length; i++) {
+            if ((fieldName = TDItemAr[i].fieldName) != null && fieldName.equals(name)) {
+                return i;
+            }
+        }
+        throw new NoSuchElementException();
     }
 
     /**
@@ -209,18 +206,13 @@ public class TupleDesc implements Serializable {
      * @return the new TupleDesc
      */
     public static TupleDesc merge(TupleDesc td1, TupleDesc td2) {
-        // some code goes here
     	int totalNumFields = td1.numFields + td2.numFields;
     	TDItem[] mergedAr = new TDItem[td1.TDItemAr.length + td2.TDItemAr.length];
-    	Map<String, Integer> mergedMap = new HashMap<String, Integer>();
     	
     	System.arraycopy(td1.TDItemAr, 0, mergedAr, 0, td1.TDItemAr.length);
     	System.arraycopy(td2.TDItemAr, 0, mergedAr, td1.TDItemAr.length, td2.TDItemAr.length);
-        
-    	mergedMap.putAll(td1.TDItemMap);
-    	mergedMap.putAll(td2.TDItemMap);
     	
-    	return new TupleDesc(totalNumFields, mergedAr, mergedMap);
+    	return new TupleDesc(totalNumFields, mergedAr);
     }
 
     /**
