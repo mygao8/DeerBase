@@ -69,6 +69,7 @@ public class BufferPool {
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page resPage = tableFile.readPage(pid);    	
     	pageMap.put(pid, resPage);
+    	numUsedPages++;
         return resPage;
     }
 
@@ -130,11 +131,20 @@ public class BufferPool {
      * @param t the tuple to add
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
-        throws DbException, IOException, TransactionAbortedException {
+        throws DbException, TransactionAbortedException {
     	HeapFile table = (HeapFile) Database.getCatalog().getDbFile(tableId);
     	ArrayList<Page> ditryPages = table.insertTuple(tid, t);
     	for (Page page : ditryPages) {
     		page.markDirty(true, tid);
+    		
+    		if (!pageMap.containsKey(page.getId())) {
+    			// a new page is created during inserting
+    	    	if (numUsedPages > numPages) {
+    	    		evictPage();
+    	    	}
+    	    	pageMap.put(page.getId(), page);
+    	    	numUsedPages++;
+    		}
     	}
     }
 

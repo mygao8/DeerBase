@@ -76,7 +76,7 @@ public class HeapFile extends DbFile {
     * @throws IOException if the needed file can't be read/written
     */
     public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
-            throws DbException, IOException, TransactionAbortedException {
+            throws DbException, TransactionAbortedException {
     	ArrayList<Page> resPages = new ArrayList<Page>();
     	
     	int pid = 0;
@@ -93,12 +93,9 @@ public class HeapFile extends DbFile {
     	if (pid == getNumPages()) {
     		// add new page
     		HeapPage newPage = new HeapPage(new HeapPageId(tableId, pid));
-    		writePage(newPage);
     		setNumPages(getNumPages() + 1);
-    		HeapPage heapPageFromBuffer  = (HeapPage) Database.getBufferPool()
-					.getPage(tid, new HeapPageId(tableId, pid), Permissions.READ_WRITE);
-    		heapPageFromBuffer.insertTuple(t);
-    		resPages.add(heapPageFromBuffer);
+    		newPage.insertTuple(t);
+    		resPages.add(newPage);
     	}
     	
     	return resPages;
