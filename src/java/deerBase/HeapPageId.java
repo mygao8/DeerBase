@@ -1,6 +1,6 @@
 package deerBase;
 
-/** Unique identifier for HeapPage objects. */
+/** Unique identifier for HeapPage objects <tableId, pageNo>. */
 public class HeapPageId implements PageId {
 
 	private int tableId;

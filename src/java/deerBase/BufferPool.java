@@ -1,6 +1,7 @@
 package deerBase;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
@@ -24,6 +25,7 @@ public class BufferPool {
     private int numPages;
     private int numUsedPages;
     private HashMap<PageId, Page> pageMap;
+    
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -116,9 +118,8 @@ public class BufferPool {
 
     /**
      * Add a tuple to the specified table behalf of transaction tid.  Will
-     * acquire a write lock on the page the tuple is added to(Lock 
-     * acquisition is not needed for lab2). May block if the lock cannot 
-     * be acquired.
+     * acquire a write lock on the page the tuple is added to. 
+     * May block if the lock cannot be acquired.
      * 
      * Marks any pages that were dirtied by the operation as dirty by calling
      * their markDirty bit, and updates cached versions of any pages that have 
@@ -130,8 +131,11 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for proj1
+    	HeapFile table = (HeapFile) Database.getCatalog().getDbFile(tableId);
+    	ArrayList<Page> ditryPages = table.insertTuple(tid, t);
+    	for (Page page : ditryPages) {
+    		page.markDirty(true, tid);
+    	}
     }
 
     /**
@@ -142,15 +146,19 @@ public class BufferPool {
      * Marks any pages that were dirtied by the operation as dirty by calling
      * their markDirty bit.  Does not need to update cached versions of any pages that have 
      * been dirtied, as it is not possible that a new page was created during the deletion
-     * (note difference from addTuple).
+     * (note difference from insertTuple).
      *
      * @param tid the transaction adding the tuple.
      * @param t the tuple to add
+     * @throws  
      */
     public  void deleteTuple(TransactionId tid, Tuple t)
         throws DbException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for proj1
+    	HeapFile table = (HeapFile) Database.getCatalog().getDbFile(
+    				t.getRecordId().getPageId().getTableId()
+    			);
+    	Page ditryPage = table.deleteTuple(tid, t);
+    	ditryPage.markDirty(true, tid);
     }
 
     /**

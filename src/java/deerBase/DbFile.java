@@ -18,6 +18,7 @@ public abstract class DbFile implements Serializable {
 	private File f;
 	private int numPages;
 	private int fileId;
+	private ArrayList<Byte> notFullPages;
 	
     /**
      * Constructs a database file backed by the specified file.
@@ -30,12 +31,15 @@ public abstract class DbFile implements Serializable {
     	this.f = f;
     	this.numPages = (int) (f.length() / BufferPool.PAGE_SIZE);
     	this.fileId = f.getAbsoluteFile().hashCode();
-    }
+    	this.notFullPages = new ArrayList<Byte>(Collections.nCopies(numPages/8 + 1, (byte) 0));
+    } 
 	
     // only used for unit test, SkeletonFile
     public DbFile (int tableId) {
     	this.fileId = tableId;
+    	this.notFullPages = new ArrayList<Byte>(Arrays.asList((byte) 0));
 	}
+    
     /**
      * Read the specified page from disk.
      *
@@ -70,7 +74,19 @@ public abstract class DbFile implements Serializable {
      *
      */
     public void writePage(Page p) throws IOException {
-    	// not implemented yet
+    	if (p == null) {
+    		throw new IllegalArgumentException();
+    	}
+    	
+    	try (RandomAccessFile adFile = new RandomAccessFile(f, "rw")) {
+    		byte[] buf = p.getPageData();
+    		int pos = p.getId().pageNumber() * BufferPool.PAGE_SIZE;
+    		
+    		adFile.seek(pos);
+    		adFile.read(buf);
+    	} catch (Exception e) {
+			e.printStackTrace();
+		}
     }
 
     
@@ -88,6 +104,10 @@ public abstract class DbFile implements Serializable {
     	return this.numPages;
     }
     
+    public int setNumPages(int numPages) {
+    	return this.numPages = numPages;
+    }
+    
     /**
      * Returns a unique ID used to identify this DbFile in the Catalog. This id
      * can be used to look up the table via {@link Catalog#getDbFile} and
@@ -100,6 +120,40 @@ public abstract class DbFile implements Serializable {
     public int getFileId() {
     	return this.fileId;
     }
+    
+    public ArrayList<Byte> getNotFullPagesList() {
+		return this.notFullPages;
+	}
+    
+    public void setNotFullPagesList(int pageIdx, boolean isFull) {
+    	int slotIdx = pageIdx/8;
+    	byte mask = (byte) (1 << (pageIdx%8));
+    	
+    	if (slotIdx > notFullPages.size()) {
+    		notFullPages.add((byte) 0);
+    	}
+    	
+    	if (isFull == true) {
+    		notFullPages.set(slotIdx, (byte) (notFullPages.get(slotIdx) | mask));
+    	} else {
+    		notFullPages.set(slotIdx, (byte) (notFullPages.get(slotIdx) & ~mask));
+    	}
+	}
+    
+    /**
+     * Returns true if associated page on this file is full.
+     */
+    public boolean isFullPage (int pageIdx) {
+    	// if the first 18 pages are used, notFullPages looks like [11111111, 11111111, 00000011, ...]
+    	int slotIdx = pageIdx/8;
+
+    	if (((notFullPages.get(slotIdx) >>> (pageIdx%8)) & 0x01) == 1) {
+    		return true;
+    	} else {
+    		return false;
+    	}
+    }
+	
     
 //    /**
 //     * Inserts the specified tuple to the file on behalf of transaction.

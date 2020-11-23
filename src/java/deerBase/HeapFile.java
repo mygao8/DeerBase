@@ -63,28 +63,63 @@ public class HeapFile extends DbFile {
     }
 
 
-    // see DbFile.java for javadocs
-    public void writePage(Page page) throws IOException {
-        // some code goes here
-        // not necessary for proj1
-    }
-
-
-
-    // see DbFile.java for javadocs
+    /**
+    * Inserts the specified tuple to the file on behalf of transaction.
+    * This method will acquire a lock on the affected pages of the file, and
+    * may block until the lock can be acquired.
+    *
+    * @param tid The transaction performing the update
+    * @param t The tuple to add.  This tuple should be updated to reflect that
+    *          it is now stored in this file.
+    * @return An ArrayList contain the pages that were modified
+    * @throws DbException if the tuple cannot be added
+    * @throws IOException if the needed file can't be read/written
+    */
     public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        return null;
-        // not necessary for proj1
+    	ArrayList<Page> resPages = new ArrayList<Page>();
+    	
+    	int pid = 0;
+    	for (pid = 0; pid < getNumPages(); pid++) {
+    		if (!isFullPage(pid)) {
+    			HeapPage heapPage  = (HeapPage) Database.getBufferPool()
+    					.getPage(tid, new HeapPageId(tableId, pid), Permissions.READ_WRITE);
+    			heapPage.insertTuple(t);
+    			resPages.add(heapPage);
+    			break;
+    		}
+    	}
+    	
+    	if (pid == getNumPages()) {
+    		// add new page
+    		HeapPage newPage = new HeapPage(new HeapPageId(tableId, pid));
+    		writePage(newPage);
+    		setNumPages(getNumPages() + 1);
+    		HeapPage heapPageFromBuffer  = (HeapPage) Database.getBufferPool()
+					.getPage(tid, new HeapPageId(tableId, pid), Permissions.READ_WRITE);
+    		heapPageFromBuffer.insertTuple(t);
+    		resPages.add(heapPageFromBuffer);
+    	}
+    	
+    	return resPages;
     }
 
-    // see DbFile.java for javadocs
+    /**
+    * Removes the specified tuple from the file on behalf of the specified
+    * transaction.
+    * This method will acquire a lock on the affected pages of the file, and
+    * may block until the lock can be acquired.
+    *
+    * @throws DbException if the tuple cannot be deleted or is not a member
+    *   of the file
+    */
     public Page deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
-        // some code goes here
-        return null;
-        // not necessary for proj1
+    	PageId pageId = t.getRecordId().getPageId();
+    	HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
+    	heapPage.deleteTuple(t);
+    	setNotFullPagesList(pageId.pageNumber(), false);
+    	return heapPage;
     }
 
     /**

@@ -26,7 +26,7 @@ public interface Page {
      *
      * @return The id of the transaction that last dirtied this page, or null
      */
-    public TransactionId isDirty();
+    public TransactionId getDirtier();
 
   /**
    * Set the dirty state of this page as dirtied by a particular transaction
