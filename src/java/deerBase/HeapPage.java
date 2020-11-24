@@ -304,6 +304,11 @@ public class HeapPage implements Page {
     	lastDirtiedTid = dirty ? tid : null;
     	isDirty = true;
     }
+    
+
+	public boolean isDirty() {
+		return isDirty;
+	}
 
     /**
      * Returns the tid of the transaction that last dirtied this page, or null if the page is not dirty
@@ -395,6 +400,5 @@ public class HeapPage implements Page {
 			throw new UnsupportedOperationException();
 		}
 	}
-
 }
 

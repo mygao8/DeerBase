@@ -3,6 +3,7 @@ package deerBase;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -24,7 +25,7 @@ public class BufferPool {
 
     private int numPages;
     private int numUsedPages;
-    private HashMap<PageId, Page> pageMap;
+    private LRUCache pageMap;
     
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -34,7 +35,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
     	this.numPages = numPages;
     	this.numUsedPages = 0;
-    	this.pageMap = new HashMap<>(numPages);
+    	this.pageMap = new LRUCache(numPages);
     }
 
     /**
@@ -58,16 +59,11 @@ public class BufferPool {
     	if (pageMap.containsKey(pid)) {
     		return pageMap.get(pid);
     	}
-    	
-        // insufficient space in buffer pool, throw exception temperately
-    	if (numUsedPages > numPages) {
-    		throw new DbException("Pages run out");
-    	}
-    	
+    	    	
     	// pid is not in buffer pool
     	// get the heapFile corresponding to pid
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
-    	Page resPage = tableFile.readPage(pid);    	
+    	Page resPage = tableFile.readPage(pid);
     	pageMap.put(pid, resPage);
     	numUsedPages++;
         return resPage;
@@ -138,10 +134,7 @@ public class BufferPool {
     		page.markDirty(true, tid);
     		
     		if (!pageMap.containsKey(page.getId())) {
-    			// a new page is created during inserting
-    	    	if (numUsedPages > numPages) {
-    	    		evictPage();
-    	    	}
+    			// a new page is created during inserting, LRUCache will evict page if full
     	    	pageMap.put(page.getId(), page);
     	    	numUsedPages++;
     		}
@@ -177,9 +170,10 @@ public class BufferPool {
      *     break deerBase if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        // some code goes here
-        // not necessary for proj1
-
+    	Iterator<PageId> pidItr = pageMap.keyIterator();
+    	while (pidItr.hasNext()) {
+			flushPage(pidItr.next());
+		}
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -189,7 +183,6 @@ public class BufferPool {
     */
     public synchronized void discardPage(PageId pid) {
         // some code goes here
-    	// not necessary for proj1
     }
 
     /**
@@ -197,24 +190,16 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
-        // some code goes here
-        // not necessary for proj1
+    	int tableId = pid.getTableId(); 
+    	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
+    	Page flushedPage = pageMap.get(pid);
+    	tableFile.writePage(flushedPage);
+    	flushedPage.markDirty(false, null);
     }
 
     /** Write all pages of the specified transaction to disk.
      */
     public synchronized  void flushPages(TransactionId tid) throws IOException {
-        // some code goes here
-        // not necessary for proj1
+    	
     }
-
-    /**
-     * Discards a page from the buffer pool.
-     * Flushes the page to disk to ensure dirty pages are updated on disk.
-     */
-    private synchronized  void evictPage() throws DbException {
-        // some code goes here
-        // not necessary for proj1
-    }
-
 }
