@@ -16,14 +16,16 @@ import java.util.Iterator;
  */
 public class BufferPool {
     /** Bytes per page, including header. */
-    public static final int PAGE_SIZE = 4096;
+    public static final int DEFAULT_PAGE_SIZE = 4096;
 
     /** Default number of pages passed to the constructor. This is used by
     other classes. BufferPool should use the numPages argument to the
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
 
-    private int numPages;
+    private static int pageSize = DEFAULT_PAGE_SIZE;
+    
+    private int maxPages;
     private int numUsedPages;
     private LRUCache pageMap;
     
@@ -33,11 +35,25 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
-    	this.numPages = numPages;
+    	this.maxPages = numPages;
     	this.numUsedPages = 0;
     	this.pageMap = new LRUCache(numPages);
     }
 
+    public static int getPageSize() {
+		return pageSize;
+	}
+    
+    // Only used for testing
+    public static void setPageSize(int pageSize) {
+    	BufferPool.pageSize = pageSize;
+    }
+    
+    // Only used for testing
+    public static void resetPageSize() {
+    	BufferPool.pageSize = DEFAULT_PAGE_SIZE;
+    }
+    
     /**
      * Retrieve the specified page with the associated permissions.
      * Will acquire a lock and may block if that lock is held by another
@@ -190,7 +206,6 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
-    	int tableId = pid.getTableId(); 
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page flushedPage = pageMap.get(pid);
     	tableFile.writePage(flushedPage);

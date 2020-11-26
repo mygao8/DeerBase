@@ -30,7 +30,7 @@ public class HeapFile extends DbFile {
      *            file.
      */
     public HeapFile(File f, TupleDesc td) {
-    	super(f);
+    	super(f, td);
     	this.td = td;
     	this.tableId = getFileId();
     }

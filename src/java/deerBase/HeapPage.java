@@ -21,7 +21,7 @@ public class HeapPage implements Page {
     int numSlots;
 
     boolean isDirty;
-    TransactionId lastDirtiedTid;
+    TransactionId dirtier;
     byte[] oldData;	// data of the page before a modify transaction, used for recovery
 
     /**
@@ -29,7 +29,7 @@ public class HeapPage implements Page {
      * The format of a HeapPage is a set of header bytes indicating
      * the slots of the page that are in use, some number of tuple slots.
      *  Specifically, the number of tuples is equal to: <p>
-     *          floor((BufferPool.PAGE_SIZE*8) / (tuple size * 8 + 1))
+     *          floor((BufferPool.getPageSize()*8) / (tuple size * 8 + 1))
      * <p> where tuple size is the size of tuples in this
      * database table, which can be determined via {@link Catalog#getTupleDesc}.
      * The number of 8-bit header words is equal to:
@@ -85,7 +85,7 @@ public class HeapPage implements Page {
     		return this.numSlots;
     	}
     	// Each tuple requires tuple size * 8 bits for its content and 1 bit for the header
-    	return (BufferPool.PAGE_SIZE * 8) / (this.td.getSize() * 8 + 1);
+    	return (BufferPool.getPageSize() * 8) / (this.td.getSize() * 8 + 1);
     }
 
     /**
@@ -167,7 +167,7 @@ public class HeapPage implements Page {
      * @return A byte array correspond to the bytes of this page.
      */
     public byte[] getPageData() {
-        int len = BufferPool.PAGE_SIZE;
+        int len = BufferPool.getPageSize();
         ByteArrayOutputStream baos = new ByteArrayOutputStream(len);
         DataOutputStream dos = new DataOutputStream(baos);
 
@@ -210,7 +210,7 @@ public class HeapPage implements Page {
         }
 
         // padding
-        int zerolen = BufferPool.PAGE_SIZE - (header.length + td.getSize() * tuples.length); //- numSlots * td.getSize();
+        int zerolen = BufferPool.getPageSize() - (header.length + td.getSize() * tuples.length); //- numSlots * td.getSize();
         byte[] zeroes = new byte[zerolen];
         try {
             dos.write(zeroes, 0, zerolen);
@@ -237,7 +237,7 @@ public class HeapPage implements Page {
      * @return The returned ByteArray.
      */
     public static byte[] createEmptyPageData() {
-        int len = BufferPool.PAGE_SIZE;
+        int len = BufferPool.getPageSize();
         return new byte[len]; //all 0
     }
 
@@ -301,7 +301,7 @@ public class HeapPage implements Page {
      * that did the dirtying
      */
     public void markDirty(boolean dirty, TransactionId tid) {
-    	lastDirtiedTid = dirty ? tid : null;
+    	dirtier = dirty ? tid : null;
     	isDirty = true;
     }
     
@@ -314,7 +314,11 @@ public class HeapPage implements Page {
      * Returns the tid of the transaction that last dirtied this page, or null if the page is not dirty
      */
     public TransactionId getDirtier() {
-    	return lastDirtiedTid;
+    	if (isDirty) {
+    		return dirtier;
+    	} else {
+    		return null;
+    	}
     }
 
     /**

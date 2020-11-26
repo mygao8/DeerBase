@@ -179,7 +179,7 @@ public class TupleDesc implements Serializable {
                 return i;
             }
         }
-        throw new NoSuchElementException();
+        throw new NoSuchElementException(name);
     }
 
     /**
