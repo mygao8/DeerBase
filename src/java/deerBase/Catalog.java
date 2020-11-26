@@ -100,11 +100,11 @@ public class Catalog {
     	if (!dbFileMap.containsKey(tableId)) {
     		throw new NoSuchElementException();
     	}
-    	// for unit test
-    	if (dbFileMap.get(tableId) instanceof SkeletonFile) {
-    		return ((SkeletonFile) dbFileMap.get(tableId)).getTupleDesc();
-    	}
-        return ((HeapFile) dbFileMap.get(tableId)).getTupleDesc();
+//    	// for unit test
+//    	if (dbFileMap.get(tableId) instanceof SkeletonFile) {
+//    		return ((SkeletonFile) dbFileMap.get(tableId)).getTupleDesc();
+//    	}
+        return dbFileMap.get(tableId).getTupleDesc();
     }
 
     /**
@@ -188,7 +188,8 @@ public class Catalog {
                 Type[] typeAr = types.toArray(new Type[0]);
                 String[] namesAr = names.toArray(new String[0]);
                 TupleDesc t = new TupleDesc(typeAr, namesAr);
-                HeapFile tabHf = new HeapFile(new File(baseFolder+"/"+name + ".dat"), t);
+                String fileName = baseFolder == null ? name + ".dat" : baseFolder+"/"+name + ".dat";
+                HeapFile tabHf = new HeapFile(new File(fileName), t);
                 addTable(tabHf,name,primaryKey);
                 System.out.println("Added table : " + name + " with schema " + t);
             }

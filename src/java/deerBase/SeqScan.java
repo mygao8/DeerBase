@@ -112,7 +112,7 @@ public class SeqScan implements DbIterator {
         	tdItem = filedItr.next();
         	typeAr[i] = tdItem.fieldType;
         	fieldName = (tdItem.fieldName == null) ? "null" : tdItem.fieldName;
-        	fieldNameAr[i] = prefix + fieldName;
+        	fieldNameAr[i] = prefix + "." + fieldName;
         	i++;
         }
         
