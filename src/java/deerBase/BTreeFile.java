@@ -287,9 +287,8 @@ public class BTreeFile extends DbFile {
 		}
 		
 		// 3. Recursively split the parent as needed to be ready for new entry
-		BTreePageId parentId = page.getParentId();
 		// get a parent page ready to accept new entry, which is already in dirty cache
-		BTreeInternalPage parent = getParentWithEmptySlots(tid, dirtypages, parentId, field);
+		BTreeInternalPage parent = getParentWithEmptySlots(tid, dirtypages, page.getParentId(), field);
 		
 		// 4. Copy the middle key up into the parent page
 		if (toParentTuple != null) {
@@ -311,7 +310,8 @@ public class BTreeFile extends DbFile {
 		page.setRightSiblingId(newRightPage.getId());
 		
 		// 5. Update the parent pointers
-		updateParentPointers(tid, dirtypages, parent);
+		updateParentPointer(tid, dirtypages, parent.getId(), page.getId());
+		updateParentPointer(tid, dirtypages, parent.getId(), newRightPage.getId());
 		
 		// 6. Return the page into which a tuple with the given key field should be inserted
 		if (toParentTuple == null) {
@@ -368,7 +368,7 @@ public class BTreeFile extends DbFile {
 		}
 		BTreeEntry toParentEntry = null;
 		boolean isFirst = true;
-		while (numToMove > 0 && entryItr.hasNext()) { //251
+		while (numToMove > 0 && entryItr.hasNext()) { 
 			BTreeEntry entry = entryItr.next();
 			// must delete first, if insert before delete, the recordId of entry will be changed
 			page.deleteKeyAndRightChild(entry); // Note mygao : maybe should use BTreeFile.delete/insertTuple
@@ -385,9 +385,8 @@ public class BTreeFile extends DbFile {
 		}
 		
 		// 3. Recursively split the parent as needed to be ready for new entry
-		BTreePageId parentId = page.getParentId();
 		// get a parent page ready to accept new entry, which is already in dirty cache
-		BTreeInternalPage parent = getParentWithEmptySlots(tid, dirtypages, parentId, field);
+		BTreeInternalPage parent = getParentWithEmptySlots(tid, dirtypages, page.getParentId(), field);
 		
 		// 4. Push the middle key up into the parent page
 		toParentEntry.setLeftChild(page.getId());
@@ -395,7 +394,9 @@ public class BTreeFile extends DbFile {
 		parent.insertEntry(toParentEntry);
 		
 		// 5. Update the parent pointers
-		updateParentPointers(tid, dirtypages, parent);
+		updateParentPointers(tid, dirtypages, newRightPage);
+		updateParentPointer(tid, dirtypages, parent.getId(), page.getId());
+		updateParentPointer(tid, dirtypages, parent.getId(), newRightPage.getId());
 		
 		// 6. Return the page into which a tuple with the given key field should be inserted
 		return field.compare(
