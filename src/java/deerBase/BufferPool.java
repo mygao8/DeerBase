@@ -141,10 +141,11 @@ public class BufferPool {
      * @param tid the transaction adding the tuple
      * @param tableId the table to add the tuple to
      * @param t the tuple to add
+     * @throws IOException 
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
-        throws DbException, TransactionAbortedException {
-    	HeapFile table = (HeapFile) Database.getCatalog().getDbFile(tableId);
+        throws DbException, TransactionAbortedException, IOException {
+    	DbFile table = Database.getCatalog().getDbFile(tableId);
     	ArrayList<Page> ditryPages = table.insertTuple(tid, t);
     	for (Page page : ditryPages) {
     		page.markDirty(true, tid);
@@ -198,14 +199,14 @@ public class BufferPool {
         cache.
     */
     public synchronized void discardPage(PageId pid) {
-        // some code goes here
+    	pageMap.remove(pid);
     }
 
     /**
      * Flushes a certain page to disk
      * @param pid an ID indicating the page to flush
      */
-    private synchronized  void flushPage(PageId pid) throws IOException {
+    private synchronized void flushPage(PageId pid) throws IOException {
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page flushedPage = pageMap.get(pid);
     	tableFile.writePage(flushedPage);

@@ -16,8 +16,9 @@ public abstract class DbFile implements Serializable {
 	private static final long serialVersionUID = 1L;
 	
 	private File f;
+	private final TupleDesc td;
 	private int numPages;
-	private int fileId;
+	private final int fileId;
 	private ArrayList<Byte> notFullPages;
 	
     /**
@@ -27,16 +28,18 @@ public abstract class DbFile implements Serializable {
      *            the file that stores the on-disk backing store for this heap
      *            file.
      */
-    public DbFile(File f) {
-    	this.f = f;
-    	this.numPages = (int) (f.length() / BufferPool.PAGE_SIZE);
+    public DbFile(File f, TupleDesc td) {
+    	this.td = td;
+		this.f = f;
+    	this.numPages = (int) (f.length() / BufferPool.getPageSize());
     	this.fileId = f.getAbsoluteFile().hashCode();
     	this.notFullPages = new ArrayList<Byte>(Collections.nCopies(numPages/8 + 1, (byte) 0));
     } 
 	
     // only used for unit test, SkeletonFile
     public DbFile (int tableId) {
-    	this.fileId = tableId;
+    	this.td = null;
+		this.fileId = tableId;
     	this.notFullPages = new ArrayList<Byte>(Arrays.asList((byte) 0));
 	}
     
@@ -52,8 +55,8 @@ public abstract class DbFile implements Serializable {
     	
     	Page resPage = null;
     	try (RandomAccessFile adFile = new RandomAccessFile(f, "r")) {
-    		byte[] buf = new byte[BufferPool.PAGE_SIZE];
-    		int pos = pid.pageNumber() * BufferPool.PAGE_SIZE;
+    		byte[] buf = new byte[BufferPool.getPageSize()];
+    		int pos = pid.pageNumber() * BufferPool.getPageSize();
     		
     		adFile.seek(pos);
     		adFile.read(buf);
@@ -80,7 +83,7 @@ public abstract class DbFile implements Serializable {
     	
     	try (RandomAccessFile adFile = new RandomAccessFile(f, "rw")) {
     		byte[] buf = p.getPageData();
-    		int pos = p.getId().pageNumber() * BufferPool.PAGE_SIZE;
+    		int pos = p.getId().pageNumber() * BufferPool.getPageSize();
     		
     		adFile.seek(pos);
     		adFile.read(buf);
@@ -121,6 +124,10 @@ public abstract class DbFile implements Serializable {
     	return this.fileId;
     }
     
+    public int getTableId() {
+    	return this.fileId;
+    }
+    
     public ArrayList<Byte> getNotFullPagesList() {
 		return this.notFullPages;
 	}
@@ -153,6 +160,16 @@ public abstract class DbFile implements Serializable {
     		return false;
     	}
     }
+    
+
+	/**
+	 * Returns the TupleDesc of the table stored in this DbFile.
+	 * 
+	 * @return TupleDesc of this DbFile.
+	 */
+	public TupleDesc getTupleDesc() {
+		return td;
+	}
 	
     
 //    /**
@@ -190,10 +207,24 @@ public abstract class DbFile implements Serializable {
      * @return an iterator over all the tuples stored in this DbFile.
      */
     public abstract DbFileIterator iterator(TransactionId tid);
+
+    /**
+	 * Insert a tuple into this DbFile, keeping the tuples in sorted order. 
+	 * May cause pages to split if the page where tuple t belongs is full.
+	 * 
+	 * @param tid - the transaction id
+	 * @param t - the tuple to insert
+	 * @return a list of all pages that were dirtied by this operation. Could include
+	 * many pages since parent pointers will need to be updated when an internal node splits.
+	 * @see #splitLeafPage(TransactionId, HashMap, BTreeLeafPage, Field)
+	 */
+	public abstract ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
+			throws DbException, IOException, TransactionAbortedException;
     
 //    /**
 //     * Returns the TupleDesc of the table stored in this DbFile.
 //     * @return TupleDesc of this DbFile.
 //     */
 //    public TupleDesc getTupleDesc();
+	
 }

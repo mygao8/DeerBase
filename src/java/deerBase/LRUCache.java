@@ -86,6 +86,19 @@ public class LRUCache {
         }
     }
 
+    /** Remove the element associated with key pid, without write to disk or check dirty
+     * 
+     * @param pid
+     */
+    public DLinkedNode remove(PageId pid) {
+    	DLinkedNode removedNode = cache.remove(pid);
+    	if (removedNode == null) {
+    		return null;
+    	}
+    	removeNode(removedNode);
+    	return removedNode;
+    }
+    
     private void addToHead(DLinkedNode node) {
         node.prev = head;
         node.next = head.next;
@@ -113,7 +126,7 @@ public class LRUCache {
      * Flushes a certain page to disk
      * @param pid an ID indicating the page to flush
      */
-    private synchronized  void flushPage(PageId pid) throws IOException {
+    private synchronized void flushPage(PageId pid) throws IOException {
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page flushedPage = cache.get(pid).value;
     	tableFile.writePage(flushedPage);

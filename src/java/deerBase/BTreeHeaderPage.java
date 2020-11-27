@@ -3,8 +3,9 @@ package deerBase;
 import java.io.*;
 
 /**
- * Each instance of BTreeHeaderPage stores data for one page of a BTreeFile and 
- * implements the Page interface that is used by BufferPool.
+ * Each instance of BTreeHeaderPage stores two pointers to the next and previous
+ * header pages, followed by a set of bytes indicating which pages in the file
+ * are used or available and implements the Page interface that is used by BufferPool.
  *
  * @see BTreeFile
  * @see BufferPool
