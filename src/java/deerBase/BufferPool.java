@@ -149,12 +149,9 @@ public class BufferPool {
     	ArrayList<Page> ditryPages = table.insertTuple(tid, t);
     	for (Page page : ditryPages) {
     		page.markDirty(true, tid);
-    		
-    		if (!pageMap.containsKey(page.getId())) {
-    			// a new page is created during inserting, LRUCache will evict page if full
-    	    	pageMap.put(page.getId(), page);
-    	    	numUsedPages++;
-    		}
+			// update to the new version of dirty pages, put in BufferPool
+	    	pageMap.put(page.getId(), page);
+	    	numUsedPages++;
     	}
     }
 
@@ -164,21 +161,26 @@ public class BufferPool {
      * the lock cannot be acquired.
      *
      * Marks any pages that were dirtied by the operation as dirty by calling
-     * their markDirty bit.  Does not need to update cached versions of any pages that have 
-     * been dirtied, as it is not possible that a new page was created during the deletion
-     * (note difference from insertTuple).
+     * their markDirty bit.  and adds versions of any pages that have 
+     * been dirtied to the cache (replacing any existing versions of those pages) so 
+     * that future requests see up-to-date pages. 
      *
      * @param tid the transaction adding the tuple.
      * @param t the tuple to add
-     * @throws  
+     * @throws IOException 
      */
-    public  void deleteTuple(TransactionId tid, Tuple t)
-        throws DbException, TransactionAbortedException {
-    	HeapFile table = (HeapFile) Database.getCatalog().getDbFile(
-    				t.getRecordId().getPageId().getTableId()
-    			);
-    	Page ditryPage = table.deleteTuple(tid, t);
-    	ditryPage.markDirty(true, tid);
+    public void deleteTuple(TransactionId tid, Tuple t)
+        throws DbException, TransactionAbortedException, IOException {
+    	int tableId = t.getRecordId().getPageId().getTableId();
+    	DbFile table = Database.getCatalog().getDbFile(tableId);
+    	
+    	ArrayList<Page> ditryPages = table.deleteTuple(tid, t);
+    	for (Page page : ditryPages) {
+    		page.markDirty(true, tid);
+			// update to the new version of dirty pages, put in BufferPool
+	    	pageMap.put(page.getId(), page);
+	    	numUsedPages++;
+    	}
     }
 
     /**
