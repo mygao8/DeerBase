@@ -220,11 +220,8 @@ public abstract class DbFile implements Serializable {
 	 */
 	public abstract ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
 			throws DbException, IOException, TransactionAbortedException;
-    
-//    /**
-//     * Returns the TupleDesc of the table stored in this DbFile.
-//     * @return TupleDesc of this DbFile.
-//     */
-//    public TupleDesc getTupleDesc();
+
+	public abstract ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) 
+			throws DbException, IOException, TransactionAbortedException;
 	
 }

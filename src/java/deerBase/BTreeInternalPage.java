@@ -35,6 +35,9 @@ public class BTreeInternalPage extends BTreePage {
 		Iterator<BTreeEntry> it  = this.iterator();
 		while (it.hasNext()) {
 			Field f = it.next().getKey();
+			String str1 = prev == null ? "null" : prev.toString();
+			String str2 = f == null ? "null" : f.toString();
+			//System.out.println(str1 + " <= " + str2);
 			assert(null == prev || prev.compare(Op.LESS_THAN_OR_EQ, f));
 			prev = f;
 		}
@@ -426,7 +429,7 @@ public class BTreeInternalPage extends BTreePage {
 			if(isSlotUsed(i)) {
 				if(keys[i].compare(Op.LESS_THAN, e.getKey())) {
 					throw new DbException("attempt to update entry with invalid key " + e.getKey() +
-							" HINT: updated key must be less than or equal to keys on the right");
+							" updated key must be less than or equal to keys on the right");
 				}
 				break;
 			}	
@@ -435,7 +438,7 @@ public class BTreeInternalPage extends BTreePage {
 			if(isSlotUsed(i)) {
 				if(i > 0 && keys[i].compare(Op.GREATER_THAN, e.getKey())) {
 					throw new DbException("attempt to update entry with invalid key " + e.getKey() +
-							" HINT: updated key must be greater than or equal to keys on the left");
+							" updated key must be greater than or equal to keys on the left");
 				}
 				children[i] = e.getLeftChild().pageNumber();
 				break;
