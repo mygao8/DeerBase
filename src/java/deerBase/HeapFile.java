@@ -79,21 +79,23 @@ public class HeapFile extends DbFile {
             throws DbException, TransactionAbortedException {
     	ArrayList<Page> resPages = new ArrayList<Page>();
     	
-    	int pid = 0;
-    	for (pid = 0; pid < getNumPages(); pid++) {
-    		if (!isFullPage(pid)) {
+    	int pageNo = 0;
+    	for (pageNo = 0; pageNo < getNumPages(); pageNo++) {
+    		if (!isFullPage(pageNo)) {
     			HeapPage heapPage  = (HeapPage) Database.getBufferPool()
-    					.getPage(tid, new HeapPageId(tableId, pid), Permissions.READ_WRITE);
+    					.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
     			heapPage.insertTuple(t);
     			resPages.add(heapPage);
     			break;
     		}
     	}
     	
-    	if (pid == getNumPages()) {
+    	if (pageNo == getNumPages()) {
     		// add new page
-    		HeapPage newPage = new HeapPage(new HeapPageId(tableId, pid));
+    		HeapPage newPage = (HeapPage) Database.getBufferPool()
+					.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
     		setNumPages(getNumPages() + 1);
+    		setNotFullPagesList(pageNo, false);
     		newPage.insertTuple(t);
     		resPages.add(newPage);
     	}
@@ -110,13 +112,15 @@ public class HeapFile extends DbFile {
     * @throws DbException if the tuple cannot be deleted or is not a member
     *   of the file
     */
-    public Page deleteTuple(TransactionId tid, Tuple t) throws DbException,
+    public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
+    	ArrayList<Page> resPages = new ArrayList<Page>();
     	PageId pageId = t.getRecordId().getPageId();
     	HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
     	heapPage.deleteTuple(t);
     	setNotFullPagesList(pageId.pageNumber(), false);
-    	return heapPage;
+    	resPages.add(heapPage);
+    	return resPages;
     }
 
     /**

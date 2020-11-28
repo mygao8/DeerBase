@@ -261,6 +261,8 @@ public class HeapPage implements Page {
     	
     	tuples[recordId.getTupleNo()] = null;
     	markSlotUsed(recordId.getTupleNo(), false);
+    	Database.getCatalog().getDbFile(pid.getTableId())
+		.setNotFullPagesList(pid.pageNumber(), false);
     }
 
     /**
@@ -271,8 +273,8 @@ public class HeapPage implements Page {
      * @param t The tuple to add.
      */
     public void insertTuple(Tuple t) throws DbException {
-    	int noEmptySlots = getNumEmptySlots();
-    	if (noEmptySlots == 0) {
+    	int numEmptySlots = getNumEmptySlots();
+    	if (numEmptySlots == 0) {
     		throw new DbException("this page is full");
     	}
     	if (!td.equals(t.getTupleDesc())) {
@@ -289,7 +291,7 @@ public class HeapPage implements Page {
     	}
     	
     	// update the status of full page immediately
-    	if (noEmptySlots == 1) {
+    	if (getNumEmptySlots() == 0) {
     		Database.getCatalog().getDbFile(pid.getTableId())
     			.setNotFullPagesList(pid.pageNumber(), true);
     	}
