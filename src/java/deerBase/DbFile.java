@@ -54,12 +54,14 @@ public abstract class DbFile implements Serializable {
     	}
     	
     	Page resPage = null;
-    	try (RandomAccessFile adFile = new RandomAccessFile(f, "r")) {
+    	try {
+    		RandomAccessFile adFile = new RandomAccessFile(f, "r");
     		byte[] buf = new byte[BufferPool.getPageSize()];
     		int pos = pid.pageNumber() * BufferPool.getPageSize();
     		
     		adFile.seek(pos);
     		adFile.read(buf);
+    		adFile.close();
     		
     		resPage = new HeapPage((HeapPageId)pid, buf);
     	} catch (Exception e) {
@@ -81,12 +83,14 @@ public abstract class DbFile implements Serializable {
     		throw new IllegalArgumentException();
     	}
     	
-    	try (RandomAccessFile adFile = new RandomAccessFile(f, "rw")) {
+    	try {
+    		RandomAccessFile adFile = new RandomAccessFile(f, "rw");
     		byte[] buf = p.getPageData();
     		int pos = p.getId().pageNumber() * BufferPool.getPageSize();
     		
     		adFile.seek(pos);
-    		adFile.read(buf);
+    		adFile.write(buf);
+    		adFile.close();
     	} catch (Exception e) {
 			e.printStackTrace();
 		}

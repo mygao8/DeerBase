@@ -28,16 +28,20 @@ public class SeqScan implements DbIterator {
      * @param tableId
      *            the table to scan.
      * @param tableAlias
-     *            the alias of this table (needed by the parser); the returned
-     *            tupleDesc should have fields with name tableAlias.fieldName
-     *            (note: this class is not responsible for handling a case where
-     *            tableAlias or fieldName are null. It shouldn't crash if they
-     *            are, but the resulting name can be null.fieldName,
-     *            tableAlias.null, or null.null).
+     *            the returned tupleDesc should have fields with name 
+     *            tableAlias.fieldName 
+     *            the resulting name can be null.fieldName,
+     *            tableAlias.null, or null.null
      */
     public SeqScan(TransactionId tid, int tableId, String tableAlias) {
-        // some code goes here
     	this.tid = tid;
+    	this.tableId = tableId;
+    	this.tableAlias = tableAlias;
+    	this.tupleItr = Database.getCatalog().getDbFile(tableId).iterator(tid);
+    }
+    
+    public SeqScan(int tableId, String tableAlias) {
+    	this.tid = new TransactionId();
     	this.tableId = tableId;
     	this.tableAlias = tableAlias;
     	this.tupleItr = Database.getCatalog().getDbFile(tableId).iterator(tid);

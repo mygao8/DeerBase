@@ -44,14 +44,14 @@ public class BTreeHeaderPage implements Page {
 		try {
 			Field f = Type.INT_TYPE.parse(dis);
 			this.nextPage = ((IntField) f).getValue();
-		} catch (java.text.ParseException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
 		try {
 			Field f = Type.INT_TYPE.parse(dis);
 			this.prevPage = ((IntField) f).getValue();
-		} catch (java.text.ParseException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
@@ -290,7 +290,7 @@ public class BTreeHeaderPage implements Page {
 		int headerbit = i % 8;
 		int headerbyte = (i - headerbit) / 8;
 
-		Debug.log(1, "BTreeHeaderPage.setSlot: setting slot %d to %b", i, value);
+		//Debug.log(1, "BTreeHeaderPage.setSlot: setting slot %d to %b", i, value);
 		if(value)
 			header[headerbyte] |= 1 << headerbit;
 		else

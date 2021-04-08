@@ -64,7 +64,7 @@ public class LRUCache {
             addToHead(newNode);
             ++size;
             if (size > capacity) {
-                // if full, delete tail from linked list
+            	// if full, delete tail from linked list
                 DLinkedNode tail = removeTail();
                 // if the removed page is dirty, flush to disk
                 if (tail.value.isDirty()) {
@@ -74,7 +74,10 @@ public class LRUCache {
 						e.printStackTrace();
 					}
                 }
+            	
                 // delete the last accessed node from cache
+            	//System.out.println("size=" + size + " capacity=" + capacity);
+                //System.out.println("remove page for " + tableName + " page #" + tail.key.pageNumber());
                 cache.remove(tail.key);
                 --size;
             }
@@ -128,6 +131,8 @@ public class LRUCache {
      */
     private synchronized void flushPage(PageId pid) throws IOException {
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
+    	String tableName = Database.getCatalog().getTableName(tableFile.getTableId());
+    	//System.out.println("flush page for " + tableName + " page #" + pid.pageNumber());
     	Page flushedPage = cache.get(pid).value;
     	tableFile.writePage(flushedPage);
     	flushedPage.markDirty(false, null);

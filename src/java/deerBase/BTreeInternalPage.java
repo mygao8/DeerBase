@@ -58,15 +58,12 @@ public class BTreeInternalPage extends BTreePage {
 	 * bytes for the parent pointer, one extra child pointer (a node with m entries 
 	 * has m+1 pointers to children), and the category of all child pages (either 
 	 * leaf or internal).
-	 *  Specifically, the number of entries is equal to: <p>
+	 * Specifically, the number of entries is equal to:
 	 *          floor((BufferPool.getPageSize()*8 - extra bytes*8) / (entry size * 8 + 1))
-	 * <p> where entry size is the size of entries in this index node
+	 * where entry size is the size of entries in this index node
 	 * (key + child pointer), which can be determined via the key field and 
 	 * {@link Catalog#getTupleDesc}.
-	 * The number of 8-bit header words is equal to:
-	 * <p>
-	 *      ceiling((no. entry slots + 1) / 8)
-	 * <p>
+	 * The number of 8-bit header words is equal to: ceiling((no. entry slots + 1) / 8)
 	 * @see Database#getCatalog
 	 * @see Catalog#getTupleDesc
 	 * @see BufferPool#getPageSize()
@@ -555,7 +552,7 @@ public class BTreeInternalPage extends BTreePage {
 
 		// insert new entry into the correct spot in sorted order
 		markSlotUsed(goodSlot, true);
-		Debug.log(1, "BTreeLeafPage.insertEntry: new entry, tableId = %d pageId = %d slotId = %d", pid.getTableId(), pid.pageNumber(), goodSlot);
+		//Debug.log(1, "BTreeLeafPage.insertEntry: new entry, tableId = %d pageId = %d slotId = %d", pid.getTableId(), pid.pageNumber(), goodSlot);
 		keys[goodSlot] = e.getKey();
 		children[goodSlot] = e.getRightChild().pageNumber();
 		e.setRecordId(new RecordId(pid, goodSlot));
@@ -610,7 +607,7 @@ public class BTreeInternalPage extends BTreePage {
 		int headerbit = i % 8;
 		int headerbyte = (i - headerbit) / 8;
 
-		Debug.log(1, "BTreeInternalPage.setSlot: setting slot %d to %b", i, value);
+		//Debug.log(1, "BTreeInternalPage.setSlot: setting slot %d to %b", i, value);
 		if(value)
 			header[headerbyte] |= 1 << headerbit;
 		else
@@ -647,11 +644,11 @@ public class BTreeInternalPage extends BTreePage {
 
 		try {
 			if(!isSlotUsed(i)) {
-				Debug.log(1, "BTreeInternalPage.getKey: slot %d in %d:%d is not used", i, pid.getTableId(), pid.pageNumber());
+				//Debug.log(1, "BTreeInternalPage.getKey: slot %d in %d:%d is not used", i, pid.getTableId(), pid.pageNumber());
 				return null;
 			}
 
-			Debug.log(1, "BTreeInternalPage.getKey: returning key %d", i);
+			//Debug.log(1, "BTreeInternalPage.getKey: returning key %d", i);
 			return keys[i];
 
 		} catch (ArrayIndexOutOfBoundsException e) {
@@ -672,11 +669,11 @@ public class BTreeInternalPage extends BTreePage {
 
 		try {
 			if(!isSlotUsed(i)) {
-				Debug.log(1, "BTreeInternalPage.getChildId: slot %d in %d:%d is not used", i, pid.getTableId(), pid.pageNumber());
+				//Debug.log(1, "BTreeInternalPage.getChildId: slot %d in %d:%d is not used", i, pid.getTableId(), pid.pageNumber());
 				return null;
 			}
 
-			Debug.log(1, "BTreeInternalPage.getChildId: returning child id %d", i);
+			//Debug.log(1, "BTreeInternalPage.getChildId: returning child id %d", i);
 			return new BTreePageId(pid.getTableId(), children[i], childCategory);
 
 		} catch (ArrayIndexOutOfBoundsException e) {

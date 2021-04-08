@@ -352,7 +352,7 @@ public class BTreeLeafPage extends BTreePage {
 
 		// insert new record into the correct spot in sorted order
 		markSlotUsed(goodSlot, true);
-		Debug.log(1, "BTreeLeafPage.insertTuple: new tuple, tableId = %d pageId = %d slotId = %d", pid.getTableId(), pid.pageNumber(), goodSlot);
+		//Debug.log(1, "BTreeLeafPage.insertTuple: new tuple, tableId = %d pageId = %d slotId = %d", pid.getTableId(), pid.pageNumber(), goodSlot);
 		RecordId rid = new RecordId(pid, goodSlot);
 		t.setRecordId(rid);
 		tuples[goodSlot] = t;

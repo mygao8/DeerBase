@@ -93,7 +93,7 @@ public class HeapPage implements Page {
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {        
-    	return (int) Math.ceil(this.numSlots / 8.0);
+    	return (int) Math.ceil(getNumTuples() / 8.0);
     }
     
     /** Return a view of this page before it was modified
@@ -176,7 +176,7 @@ public class HeapPage implements Page {
             try {
                 dos.writeByte(header[i]);
             } catch (IOException e) {
-                // this really shouldn't happen
+                // this shouldn't happen
                 e.printStackTrace();
             }
         }

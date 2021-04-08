@@ -6,7 +6,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 
-import deerBase.TestUtil.SkeletonFile;
 
 /**
  * The Catalog keeps track of all available tables in the database and their
@@ -100,7 +99,6 @@ public class Catalog {
     	if (!dbFileMap.containsKey(tableId)) {
     		throw new NoSuchElementException();
     	}
-//    	// for unit test
 //    	if (dbFileMap.get(tableId) instanceof SkeletonFile) {
 //    		return ((SkeletonFile) dbFileMap.get(tableId)).getTupleDesc();
 //    	}

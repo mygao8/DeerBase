@@ -43,7 +43,7 @@ public enum Type implements Serializable {
                 int strLen = dis.readInt();
                 byte buf[] = new byte[strLen];
                 dis.read(buf);
-                // skip padding 0s, 
+                // skip padding 0s
                 dis.skipBytes(STRING_LEN-strLen);
                 return new StringField(new String(buf), STRING_LEN);
             } catch (IOException e) {

@@ -59,7 +59,7 @@ public class BTreeFile extends DbFile {
 					throw new IllegalArgumentException("Unable to read "
 							+ BTreeRootPtrPage.getPageSize() + " bytes from BTreeFile");
 				}
-				Debug.log(1, "BTreeFile.readPage: read page %d", id.pageNumber());
+				//Debug.log(1, "BTreeFile.readPage: read page %d", id.pageNumber());
 				BTreeRootPtrPage p = new BTreeRootPtrPage(id, pageBuf);
 				return p;
 			}
@@ -78,7 +78,7 @@ public class BTreeFile extends DbFile {
 					throw new IllegalArgumentException("Unable to read "
 							+ BufferPool.getPageSize() + " bytes from BTreeFile");
 				}
-				Debug.log(1, "BTreeFile.readPage: read page %d", id.pageNumber());
+				//Debug.log(1, "BTreeFile.readPage: read page %d", id.pageNumber());
 				if(id.pgcateg() == BTreePageId.INTERNAL) {
 					BTreeInternalPage p = new BTreeInternalPage(id, pageBuf, keyField);
 					return p;
@@ -100,7 +100,6 @@ public class BTreeFile extends DbFile {
 				if (bis != null)
 					bis.close();
 			} catch (IOException ioe) {
-				// Ignore failures closing the file
 			}
 		}
 	}
@@ -442,7 +441,6 @@ public class BTreeFile extends DbFile {
 			prevRootPage.setParentId(parent.getId());
 		}
 		else { 
-			// lock the parent page
 			parent = (BTreeInternalPage) getPage(tid, dirtypages, parentId, 
 					Permissions.READ_WRITE);
 		}
@@ -469,7 +467,7 @@ public class BTreeFile extends DbFile {
 	 */
 	private void updateParentPointer(TransactionId tid, HashMap<PageId, Page> dirtypages, 
 			BTreePageId pid, BTreePageId child) throws DbException, IOException, TransactionAbortedException {
-
+		
 		BTreePage p = (BTreePage) getPage(tid, dirtypages, child, Permissions.READ_ONLY);
 
 		if(!p.getParentId().equals(pid)) {
@@ -494,23 +492,25 @@ public class BTreeFile extends DbFile {
 	 */
 	private void updateParentPointers(TransactionId tid, HashMap<PageId, Page> dirtypages, 
 			BTreeInternalPage parentPage) throws DbException, IOException, TransactionAbortedException{
-		Iterator<BTreeEntry> it = parentPage.iterator();
+		Iterator<BTreeEntry> itr = parentPage.iterator();
 		BTreePageId pid = parentPage.getId();
-		BTreeEntry e = null;
-		while(it.hasNext()) {
-			e = it.next();
-			updateParentPointer(tid, dirtypages, pid, e.getLeftChild());
+		BTreeEntry entry = null;
+		
+		while(itr.hasNext()) {
+			entry = itr.next();
+			updateParentPointer(tid, dirtypages, pid, entry.getLeftChild());
 		}
-		if(e != null) {
-			updateParentPointer(tid, dirtypages, pid, e.getRightChild());
+		
+		if(entry != null) {
+			updateParentPointer(tid, dirtypages, pid, entry.getRightChild());
 		}
 	}
 	
 	/**
-	 * Method to encapsulate the process of locking/fetching a page.  
-	 * First the method checks the local cache ("dirtypages"), 
+	 * The process of locking/fetching a page.
+	 * 1. the method checks the local cache ("dirtypages"), 
 	 * and if it can't find the requested page there, it fetches it from the buffer pool.  
-	 * It also adds pages to the dirtypages cache if they are fetched with read-write permission, 
+	 * 2. add pages to the dirtypages cache if they are fetched with write permission, 
 	 * since presumably they will soon be dirtied by this transaction.
 	 * 
 	 * This method is needed to ensure that page updates are not lost if the same pages are
@@ -606,15 +606,15 @@ public class BTreeFile extends DbFile {
 		// the page and siblings
 		if(parentId.pgcateg() != BTreePageId.ROOT_PTR) {
 			parent = (BTreeInternalPage) getPage(tid, dirtypages, parentId, Permissions.READ_WRITE);
-			Iterator<BTreeEntry> ite = parent.iterator();
-			while(ite.hasNext()) {
-				BTreeEntry e = ite.next();
-				if(e.getLeftChild().equals(page.getId())) {
-					rightEntry = e;
+			Iterator<BTreeEntry> itr = parent.iterator();
+			while(itr.hasNext()) {
+				BTreeEntry entry = itr.next();
+				if(entry.getLeftChild().equals(page.getId())) {
+					rightEntry = entry;
 					break;
 				}
-				else if(e.getRightChild().equals(page.getId())) {
-					leftEntry = e;
+				else if(entry.getRightChild().equals(page.getId())) {
+					leftEntry = entry;
 				}
 			}
 		}
@@ -622,7 +622,8 @@ public class BTreeFile extends DbFile {
 		if(page.getId().pgcateg() == BTreePageId.LEAF) {
 			handleMinOccupancyLeafPage(tid, dirtypages, (BTreeLeafPage) page, parent, leftEntry, rightEntry);
 		}
-		else { // BTreePageId.INTERNAL
+		else { 
+			// BTreePageId.INTERNAL
 			handleMinOccupancyInternalPage(tid, dirtypages, (BTreeInternalPage) page, parent, leftEntry, rightEntry);
 		}
 	}

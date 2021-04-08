@@ -15,14 +15,14 @@ public class Database {
     private final Catalog _catalog;
     private BufferPool _bufferpool; 
 
-    private final static String LOGFILENAME = "log";
+    private final static String LOGFILE_NAME = "log";
     private LogFile _logfile;
 
     private Database() {
     	_catalog = new Catalog();
     	_bufferpool = new BufferPool(BufferPool.DEFAULT_PAGES);
     	try {
-            _logfile = new LogFile(new File(LOGFILENAME));
+            _logfile = new LogFile(new File(LOGFILE_NAME));
         } catch(IOException e) {
             _logfile = null;
             e.printStackTrace();

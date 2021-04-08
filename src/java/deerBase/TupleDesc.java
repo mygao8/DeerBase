@@ -46,7 +46,7 @@ public class TupleDesc implements Serializable {
      *        that are included in this TupleDesc
      * */
     public Iterator<TDItem> iterator() {
-        // some code goes here
+ 
         return new TDItemItr();
     }
 
@@ -104,7 +104,7 @@ public class TupleDesc implements Serializable {
      *            TupleDesc. It must contain at least one entry.
      */
     public TupleDesc(Type[] typeAr) {
-        // some code goes here
+ 
     	this(typeAr, new String[typeAr.length]);
     }
     
@@ -153,7 +153,7 @@ public class TupleDesc implements Serializable {
      *             if i is not a valid field reference.
      */
     public Type getFieldType(int i) throws NoSuchElementException {
-        // some code goes here
+ 
     	if (i < 0 || i >= this.numFields) {
     		throw new NoSuchElementException();
     	}
@@ -187,7 +187,7 @@ public class TupleDesc implements Serializable {
      *         Note that tuples from a given TupleDesc are of a fixed size.
      */
     public int getSize() {
-        // some code goes here
+ 
     	int totalSize = 0;
         for (TDItem item : TDItemAr) {
         	totalSize += item.fieldType.getLen();
@@ -225,7 +225,7 @@ public class TupleDesc implements Serializable {
      * @return true if the object is equal to this TupleDesc.
      */
     public boolean equals(Object o) {
-        // some code goes here
+ 
     	if (this == o) {
     		return true;
     	}
@@ -259,7 +259,7 @@ public class TupleDesc implements Serializable {
      * @return String describing this descriptor.
      */
     public String toString() {
-        // some code goes here
+ 
     	StringBuffer str = new StringBuffer();
     	for (TDItem item : this.TDItemAr) {
     		str.append(item.toString());

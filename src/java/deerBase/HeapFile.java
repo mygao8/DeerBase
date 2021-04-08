@@ -13,7 +13,6 @@ import deerBase.BufferPool;
  * constructor.
  * 
  * @see deerBase.HeapPage#HeapPage
- * @author Sam Madden
  */
 public class HeapFile extends DbFile {
 

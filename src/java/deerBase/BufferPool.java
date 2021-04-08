@@ -21,13 +21,20 @@ public class BufferPool {
     /** Default number of pages passed to the constructor. This is used by
     other classes. BufferPool should use the numPages argument to the
     constructor instead. */
-    public static final int DEFAULT_PAGES = 50;
+    public static final int DEFAULT_PAGES = 5120;
+    
+    /** Default ratio of loading a full table into buffer pool, which equals
+    to table.numPages() / BufferPool.numPages(). */
+    public static final double DEFUALT_LOAD_TABLE_RATIO = (float) 0.3;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
     
-    private int maxPages;
+    private static double loadTableRatio = DEFUALT_LOAD_TABLE_RATIO;
+    
+    private int numPages;
     private int numUsedPages;
     private LRUCache pageMap;
+    private LRUCache fixedMap;
     
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -35,11 +42,17 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
-    	this.maxPages = numPages;
+    	this.numPages = numPages;
     	this.numUsedPages = 0;
     	this.pageMap = new LRUCache(numPages);
+    	this.fixedMap = new LRUCache(numPages);
     }
 
+    public BufferPool(int numPages, float loadTableRatio) {
+    	this(numPages);
+    	this.loadTableRatio = loadTableRatio;
+    }
+    
     public static int getPageSize() {
 		return pageSize;
 	}
@@ -75,11 +88,48 @@ public class BufferPool {
     	if (pageMap.containsKey(pid)) {
     		return pageMap.get(pid);
     	}
-    	    	
+    	
     	// pid is not in buffer pool
     	// get the heapFile corresponding to pid
-    	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
-    	Page resPage = tableFile.readPage(pid);
+    	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
+    	String tableName = Database.getCatalog().getTableName(dbFile.getTableId());
+    	
+//    	if (dbFile instanceof HeapFile) {
+//    		//System.out.println("dbFile is HeapFile");
+//    		//System.out.println((double) dbFile.getNumPages() + " / " 
+//    		//		+ (double) this.numPages + " <= " + loadTableRatio);
+//    	}
+    	
+    	
+    	if (tableName.equals("paperauths")) {
+    		//System.out.println("authors");
+    		if (fixedMap.containsKey(pid)) {
+    			return fixedMap.get(pid);
+    		}
+    		
+    		Page resPage = dbFile.readPage(pid);
+    		fixedMap.put(pid, resPage);
+    		return resPage;
+    	}
+    	
+    	// load full table
+//    	if (dbFile instanceof HeapFile && 
+//    			(double) dbFile.getNumPages() / (double) this.numPages <= loadTableRatio) {
+//    		//System.out.println("load full table for " + tableName);
+//    		for (int pageNo = 0; pageNo < dbFile.getNumPages(); pageNo++) {
+//    			PageId heapPid = new HeapPageId(dbFile.getTableId(), pageNo);
+//    			if (!pageMap.containsKey(heapPid)) {
+//    				Page page = dbFile.readPage(heapPid);
+//    				pageMap.put(heapPid, page);
+//    				numUsedPages++;
+//    			}
+//    		}
+//    	}
+    	
+    	Page resPage = dbFile.readPage(pid);
+    	//System.out.println("load page for " + tableName + " page #" + pid.pageNumber());
+
+    	
     	pageMap.put(pid, resPage);
     	numUsedPages++;
         return resPage;
@@ -108,14 +158,14 @@ public class BufferPool {
         // some code goes here
         // not necessary for proj1
     }
-
+    
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for proj1
         return false;
     }
-
+    
     /**
      * Commit or abort a given transaction; release all locks associated to
      * the transaction.
@@ -128,7 +178,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for proj1
     }
-
+    
     /**
      * Add a tuple to the specified table behalf of transaction tid.  Will
      * acquire a write lock on the page the tuple is added to. 
@@ -214,10 +264,21 @@ public class BufferPool {
     	tableFile.writePage(flushedPage);
     	flushedPage.markDirty(false, null);
     }
+    
 
     /** Write all pages of the specified transaction to disk.
      */
     public synchronized  void flushPages(TransactionId tid) throws IOException {
-    	
+        // some code goes here
+        // not necessary for proj1
+    }
+
+    /**
+     * Discards a page from the buffer pool.
+     * Flushes the page to disk to ensure dirty pages are updated on disk.
+     */
+    private synchronized  void evictPage() throws DbException {
+        // some code goes here
+        // not necessary for proj1
     }
 }

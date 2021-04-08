@@ -3,9 +3,7 @@ package deerBase;
 import java.util.NoSuchElementException;
 
 /**
- * Abstract class for implementing operators. It handles <code>close</code>,
- * <code>next</code> and <code>hasNext</code>. Subclasses only need to implement
- * <code>open</code> and <code>readNext</code>.
+ * Abstract class for implementing operators.
  */
 public abstract class Operator implements DbIterator {
 
@@ -35,8 +33,8 @@ public abstract class Operator implements DbIterator {
 
     /**
      * Returns the next Tuple in the iterator, or null if the iteration is
-     * finished. Operator uses this method to implement both <code>next</code>
-     * and <code>hasNext</code>.
+     * finished. Operator uses this method to implement both next
+     * and hasNext.
      * 
      * @return the next Tuple in the iterator, or null if the iteration is
      *         finished.
