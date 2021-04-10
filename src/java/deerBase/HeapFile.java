@@ -84,6 +84,7 @@ public class HeapFile extends DbFile {
     			HeapPage heapPage  = (HeapPage) Database.getBufferPool()
     					.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
     			heapPage.insertTuple(t);
+    			heapPage.markDirty(true, tid);
     			resPages.add(heapPage);
     			break;
     		}
@@ -96,6 +97,7 @@ public class HeapFile extends DbFile {
     		setNumPages(getNumPages() + 1);
     		setNotFullPagesList(pageNo, false);
     		newPage.insertTuple(t);
+    		newPage.markDirty(true, tid);
     		resPages.add(newPage);
     	}
     	
@@ -117,6 +119,7 @@ public class HeapFile extends DbFile {
     	PageId pageId = t.getRecordId().getPageId();
     	HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
     	heapPage.deleteTuple(t);
+    	heapPage.markDirty(true, tid);
     	setNotFullPagesList(pageId.pageNumber(), false);
     	resPages.add(heapPage);
     	return resPages;

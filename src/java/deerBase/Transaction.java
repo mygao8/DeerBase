@@ -1,6 +1,8 @@
 package deerBase;
 
 import java.io.*;
+import java.util.LinkedList;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Transaction encapsulates information about the state of
@@ -10,7 +12,7 @@ import java.io.*;
 public class Transaction {
     private final TransactionId tid;
     volatile boolean started = false;
-
+    
     public Transaction() {
         tid = new TransactionId();
     }

@@ -4,6 +4,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -35,6 +36,8 @@ public class BufferPool {
     private int numUsedPages;
     private LRUCache pageMap;
     private LRUCache fixedMap;
+    
+    //private Database.getLockManager() Database.getLockManager();
     
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -85,6 +88,21 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
     	// TODO: tid and perm
+    	Database.getLockManager().debug(tid, pid, "getPage");
+    	synchronized (pid) {
+    		boolean acquired = Database.getLockManager().tryAcquireLock(tid, pid, perm);
+    		while (!acquired) {
+    			try {
+					pid.wait();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+    		}
+		}
+    	
+    	
+    	
     	if (pageMap.containsKey(pid)) {
     		return pageMap.get(pid);
     	}
@@ -101,16 +119,16 @@ public class BufferPool {
 //    	}
     	
     	
-    	if (tableName.equals("paperauths")) {
-    		//System.out.println("authors");
-    		if (fixedMap.containsKey(pid)) {
-    			return fixedMap.get(pid);
-    		}
-    		
-    		Page resPage = dbFile.readPage(pid);
-    		fixedMap.put(pid, resPage);
-    		return resPage;
-    	}
+//    	if (tableName.equals("paperauths")) {
+//    		//System.out.println("authors");
+//    		if (fixedMap.containsKey(pid)) {
+//    			return fixedMap.get(pid);
+//    		}
+//    		
+//    		Page resPage = dbFile.readPage(pid);
+//    		fixedMap.put(pid, resPage);
+//    		return resPage;
+//    	}
     	
     	// load full table
 //    	if (dbFile instanceof HeapFile && 
@@ -147,6 +165,8 @@ public class BufferPool {
     public  void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for proj1
+    	
+    	Database.getLockManager().releaseLock(tid, pid);
     }
 
     /**
@@ -157,13 +177,21 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for proj1
+    	
+    	List<Lock> locks = Database.getLockManager().getLocksInTransation(tid);
+    	if (locks == null) return;
+    	
+    	for (Lock lock : locks) {
+    		Database.getLockManager().releaseLock(lock);
+    	}
     }
     
     /** Return true if the specified transaction has a lock on the specified page */
-    public boolean holdsLock(TransactionId tid, PageId p) {
+    public boolean holdsLock(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for proj1
-        return false;
+        
+    	return Database.getLockManager().holdsLock(tid, pid);
     }
     
     /**

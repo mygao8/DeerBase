@@ -304,7 +304,7 @@ public class HeapPage implements Page {
      */
     public void markDirty(boolean dirty, TransactionId tid) {
     	dirtier = dirty ? tid : null;
-    	isDirty = true;
+    	isDirty = dirty;
     }
     
 

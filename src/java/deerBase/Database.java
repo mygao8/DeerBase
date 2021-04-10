@@ -14,12 +14,14 @@ public class Database {
 	private static Database _instance = new Database();
     private final Catalog _catalog;
     private BufferPool _bufferpool; 
-
+    private LockManager _lockManager;
+    
     private final static String LOGFILE_NAME = "log";
     private LogFile _logfile;
 
     private Database() {
     	_catalog = new Catalog();
+    	_lockManager = new LockManager();
     	_bufferpool = new BufferPool(BufferPool.DEFAULT_PAGES);
     	try {
             _logfile = new LogFile(new File(LOGFILE_NAME));
@@ -44,6 +46,11 @@ public class Database {
     /** Return the catalog of the static Database instance*/
     public static Catalog getCatalog() {
         return _instance._catalog;
+    }
+    
+    /** Return the lockManager of the static Database instance*/
+    public static LockManager getLockManager() {
+        return _instance._lockManager;
     }
 
     /** Method used for testing -- create a new instance of the
