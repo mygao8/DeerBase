@@ -75,7 +75,7 @@ public class Join extends Operator {
     }
 
     /**
-     * @see simpledb.TupleDesc#merge(TupleDesc, TupleDesc) for possible
+     * @see deerbase.TupleDesc#merge(TupleDesc, TupleDesc) for possible
      *      implementation logic.
      */
     public TupleDesc getTupleDesc() {

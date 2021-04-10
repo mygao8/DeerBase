@@ -9,6 +9,13 @@
 	<classpathentry kind="lib" path="lib/mina-filter-compression-2.0.4.jar"/>
 	<classpathentry kind="lib" path="lib/jzlib-1.0.7.jar"/>
 	<classpathentry kind="lib" path="lib/slf4j-api-1.6.1.jar"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="lib/guava-23.0.jar"/>
+	<classpathentry kind="lib" path="lib/externalsortinginjava-0.6.0-javadoc.jar"/>
+	<classpathentry kind="lib" path="lib/externalsortinginjava-0.6.0.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
+		<attributes>
+			<attribute name="module" value="true"/>
+		</attributes>
+	</classpathentry>
 	<classpathentry kind="output" path="bin/src"/>
 </classpath>

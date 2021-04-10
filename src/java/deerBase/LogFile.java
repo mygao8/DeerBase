@@ -6,7 +6,7 @@ import java.util.*;
 import java.lang.reflect.*;
 
 /**
-LogFile implements the recovery subsystem of SimpleDb.  This class is
+LogFile implements the recovery subsystem of deerbase.  This class is
 able to write different log records as needed, but it is the
 responsibility of the caller to ensure that write ahead logging and
 two-phase locking discipline are followed.  <p>
@@ -192,7 +192,7 @@ public class LogFile {
         @param before The before image of the page
         @param after The after image of the page
 
-        @see simpledb.Page#getBeforeImage
+        @see deerbase.Page#getBeforeImage
     */
     public  synchronized void logWrite(TransactionId tid, Page before,
                                        Page after)
