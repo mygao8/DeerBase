@@ -1,4 +1,4 @@
-package deerbase.systemtest;
+package deerBase.systemtest;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -11,7 +11,7 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
-import deerbase.*;
+import deerBase.*;
 
 import static org.junit.Assert.*;
 
@@ -19,7 +19,7 @@ import static org.junit.Assert.*;
  * Tests running concurrent transactions.
  * You do not need to pass this test until lab3.
  */
-public class TransactionTest extends deerbaseTestBase {
+public class TransactionTest extends DeerBaseTestBase {
     // Wait up to 10 minutes for the test to complete
     private static final int TIMEOUT_MILLIS = 10 * 60 * 1000;
     private void validateTransactions(int threads)
@@ -32,7 +32,7 @@ public class TransactionTest extends deerbaseTestBase {
         ModifiableCyclicBarrier latch = new ModifiableCyclicBarrier(threads);
         XactionTester[] list = new XactionTester[threads];
         for(int i = 0; i < list.length; i++) {
-            list[i] = new XactionTester(table.getId(), latch);
+            list[i] = new XactionTester(table.getTableId(), latch);
             list[i].start();
         }
 

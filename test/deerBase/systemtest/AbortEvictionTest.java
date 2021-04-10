@@ -1,13 +1,13 @@
-package deerbase.systemtest;
+package deerBase.systemtest;
 
 import java.io.IOException;
 
-import deerbase.*;
+import deerBase.*;
 
 import static org.junit.Assert.*;
 import org.junit.Test;
 
-public class AbortEvictionTest extends deerbaseTestBase {
+public class AbortEvictionTest extends DeerBaseTestBase {
     /** Aborts a transaction and ensures that its effects were actually undone.
      * This requires dirty pages to <em>not</em> get flushed to disk.
      */

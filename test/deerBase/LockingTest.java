@@ -1,4 +1,4 @@
-package deerbase;
+package deerBase;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -33,7 +33,7 @@ public class LockingTest extends TestUtil.CreateHeapFile {
     }
 
     // if this fails, complain to the TA
-    assertEquals(3, empty.numPages());
+    assertEquals(3, empty.getNumPages());
 
     this.p0 = new HeapPageId(empty.getId(), 0);
     this.p1 = new HeapPageId(empty.getId(), 1);

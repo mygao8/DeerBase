@@ -1,6 +1,6 @@
-package deerbase;
+package deerBase;
 
-import deerbase.TestUtil.LockGrabber;
+import deerBase.TestUtil.LockGrabber;
 
 import java.util.*;
 import org.junit.Before;
@@ -37,7 +37,7 @@ public class DeadlockTest extends TestUtil.CreateHeapFile {
     }
 
     // if this fails, complain to the TA
-    assertEquals(3, empty.numPages());
+    assertEquals(3, empty.getNumPages());
 
     this.p0 = new HeapPageId(empty.getId(), 0);
     this.p1 = new HeapPageId(empty.getId(), 1);
