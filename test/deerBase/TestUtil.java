@@ -362,7 +362,7 @@ public class TestUtil {
                 synchronized(elock) {
                     error = e;
                 }
-
+            } finally {
                 try {
                     Database.getBufferPool().transactionComplete(tid, false);
                 } catch (java.io.IOException e2) {
@@ -394,6 +394,7 @@ public class TestUtil {
     /** JUnit fixture that creates a heap file and cleans it up afterward. */
     public static abstract class CreateHeapFile {
         protected CreateHeapFile() {
+        	MyDebug.print(2, "CreateHeapFile in TestUtil");
             try{
                 emptyFile = File.createTempFile("empty", ".dat");
             } catch (IOException e) {
@@ -403,6 +404,7 @@ public class TestUtil {
         }
 
         protected void setUp() throws Exception {
+        	MyDebug.print(2, "setUp in TestUtil");
             try{
             	Database.reset();
                 empty = Utility.createEmptyHeapFile(emptyFile.getAbsolutePath(), 2);

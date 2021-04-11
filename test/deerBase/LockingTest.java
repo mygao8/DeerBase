@@ -20,6 +20,7 @@ public class LockingTest extends TestUtil.CreateHeapFile {
    * Set up initial resources for each unit test.
    */
   @Before public void setUp() throws Exception {
+	MyDebug.print(2, "setUp in LockingTest");
     super.setUp();
 
     // clear all state from the buffer pool
@@ -27,6 +28,7 @@ public class LockingTest extends TestUtil.CreateHeapFile {
 
     // create a new empty HeapFile and populate it with three pages.
     // we should be able to add 512 tuples on an empty page.
+    MyDebug.print(2, "before insert in LockingTest");
     TransactionId tid = new TransactionId();
     for (int i = 0; i < 1025; ++i) {
       empty.insertTuple(tid, Utility.getHeapTuple(i, 2));
@@ -67,6 +69,7 @@ public class LockingTest extends TestUtil.CreateHeapFile {
       TransactionId tid2, PageId pid2, Permissions perm2,
       boolean expected) throws Exception {
 
+	MyDebug.print(2, "before getPage in metaLockTester");
     bp.getPage(tid1, pid1, perm1);
     grabLock(tid2, pid2, perm2, expected);
   }
@@ -84,6 +87,7 @@ public class LockingTest extends TestUtil.CreateHeapFile {
   public void grabLock(TransactionId tid, PageId pid, Permissions perm,
       boolean expected) throws Exception {
 
+	MyDebug.print(2, "in grabLock");
     TestUtil.LockGrabber t = new TestUtil.LockGrabber(tid, pid, perm);
     t.start();
 
@@ -91,7 +95,7 @@ public class LockingTest extends TestUtil.CreateHeapFile {
     Thread.sleep(TIMEOUT);
     assertEquals(expected, t.acquired());
     assertNull(t.getError());
-
+    
     // TODO(ghuo): yes, stop() is evil, but this is unit test cleanup
     t.stop();
   }

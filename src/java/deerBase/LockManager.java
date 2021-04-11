@@ -1,6 +1,7 @@
 package deerBase;
 
 
+
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -9,83 +10,166 @@ import java.util.function.Predicate;
 
 public class LockManager {
 	// keep track of all locks holden by specific tid
-	private ConcurrentMap<TransactionId, List<Lock>> tid2Lock;
+	private ConcurrentMap<TransactionId, List<Lock>> txnLockMap;
 	// store which transactions hold this shared lock
-    private ConcurrentMap<PageId, List<Lock>> pid2Lock;
+    private ConcurrentMap<PageId, List<Lock>> pageLockMap;
+    
+    int debug = 1;
     
     public LockManager() {
-    	tid2Lock = new ConcurrentHashMap<>();
-		pid2Lock = new ConcurrentHashMap<>();
+    	txnLockMap = new ConcurrentHashMap<>();
+		pageLockMap = new ConcurrentHashMap<>();
     }
     
-    public synchronized ConcurrentMap<TransactionId, List<Lock>> getTid2LockMap() {
-    	return this.tid2Lock;
+    private synchronized ConcurrentMap<TransactionId, List<Lock>> getTid2LockMap() {
+    	return this.txnLockMap;
     }
     
-    public synchronized ConcurrentMap<PageId, List<Lock>> getLockMap() {
-    	return this.pid2Lock;
+    private synchronized ConcurrentMap<PageId, List<Lock>> getLockMap() {
+    	return this.pageLockMap;
     }
     
-    public synchronized List<Lock> getLocksOnPage(PageId pid) {
-    	return pid2Lock.get(pid);
+    private synchronized List<Lock> getLocksOnPage(PageId pid) {
+    	return pageLockMap.get(pid);
     }
     
-    public synchronized List<Lock> getLocksInTransation(TransactionId tid) {
-    	return tid2Lock.get(tid);
+    private synchronized List<Lock> getLocksInTransation(TransactionId tid) {
+    	return txnLockMap.get(tid);
     }
     
+    // the unique API to acquire lock for other classes
+    // also the unique function where put lock into txnLockMap
     public synchronized boolean tryAcquireLock(TransactionId tid, PageId pid, Permissions perm) {
-    	if (perm == Permissions.READ_ONLY) {
-    		return tryAcquireSLock(tid, pid);
+//    	if (tid.getId() == 0) {
+//    		// for test tid
+//    		return true;
+//    	}
+    	debug(tid, pid, "tryAcquire" + perm);
+    	boolean acquired = false;
+    	if (Permissions.READ_ONLY.equals(perm)) {
+    		acquired = tryAcquireSLock(tid, pid);
     	}
-    	if (perm == Permissions.READ_WRITE) {
-    		return tryAcquireXLock(tid, pid);
+    	else if (Permissions.READ_WRITE.equals(perm)) {
+    		acquired = tryAcquireXLock(tid, pid);
     	}
     	else {
     		System.out.println("unsupported perm");
     		return false;
     	}
+    	
+    	if (acquired) {
+    		List<Lock> locksOnTxn = txnLockMap.get(tid);
+    		Lock acquiredLock = new Lock(perm, pid, tid);
+    		
+    		debug(tid, pid, "put lock into txnLockMap");
+    		if (locksOnTxn == null) {
+    			txnLockMap.put(tid, new LinkedList<Lock>() {{
+        			add(acquiredLock);
+        		}});
+    		} 
+    		else {
+    			if (locksOnTxn.isEmpty()) {
+    				debug("=========Empty List in Map Value=========");
+    			}
+    			locksOnTxn.add(acquiredLock);
+    		}
+    	}
+    	
+    	return acquired;
     }
     
-    public synchronized boolean tryAcquireSLock(TransactionId tid, PageId pid) {
-    	debug(tid, pid, "tryAcquireS");
-    	List<Lock> lockList = pid2Lock.get(pid);
-    	if (lockList == null) {
-    		pid2Lock.put(pid, new LinkedList<Lock>() {{
+    private synchronized <K> void putLockInMap(ConcurrentMap<K, List<Lock>> map, 
+    		K key, Lock acquiredLock) {
+			
+    	List<Lock> locksList = map.get(key);
+    	if (locksList == null) {
+    		map.put(key, new LinkedList<Lock>() {{
+    			add(acquiredLock);
+    		}});
+    		
+//    		debug(acquiredLock.getTransactionId(), acquiredLock.getPageId(), 
+//    				"tryAcquire" + acquiredLock.getMode() 
+//    				+ "in putLockInMap: no lock in cur page, true");
+    		return;
+    	} 
+    	
+    	synchronized (locksList) {
+    		locksList.add(acquiredLock);
+    	}
+    }
+    
+    private synchronized boolean tryAcquireSLock(TransactionId tid, PageId pid) {
+    	// debug(tid, pid, "tryAcquireS");
+    	List<Lock> locksOnPage = pageLockMap.get(pid);
+    	if (locksOnPage == null) {
+    		pageLockMap.put(pid, new LinkedList<Lock>() {{
     			add(new Lock(LockMode.R, pid, tid));
     		}});
+    		debug(tid, pid, "tryAcquireS, no lock in cur page, true");
+    		
     		return true;
     	}
     	
-    	synchronized (lockList) {
+    	debug(tid, pid, "tryAcquireS before lock locksOnPage");
+    	synchronized (locksOnPage) {
     		//assertFalse(lockList.isEmpty());
-    		
-    		LockMode curMode = lockList.get(0).getMode();
-    		if (curMode == LockMode.R) {
-    			lockList.add(new Lock(LockMode.R, pid, tid));
+    		LockMode curMode = locksOnPage.get(0).getMode();
+    		debug(tid, pid, "tryAcquireS: lock" + curMode + " on locksOnPage");
+    		if (curMode == LockMode.R) {    		
+    			// already has SLock on this page, do nothing
+    			for (Lock lock : locksOnPage) {
+    				if (lock.getTransactionId().equals(tid)) {
+    					debug(tid, pid, "tryAcquireS: is already hold S? true, do nothing");
+    					return true;
+    				}
+    			}
+    			
+    			// has no SLock, add SLock
+    			debug(tid, pid, "tryAcquireS: is already hold S? false, add SLock on page");
+    			locksOnPage.add(new Lock(LockMode.R, pid, tid));	
     			return true;
     		} else {
-    			return false;
+    			if (locksOnPage.size() > 1) {
+    				debug("=========="+ locksOnPage.size() +"locks on Page=========");
+    			}
+    			
+    			// if own XLock, equivalent to acquire S successfully
+    			// else, others XLock, cannot get S
+    			debug(tid, pid, "tryAcquireS: is already hold X? " 
+    					+ locksOnPage.get(0).getTransactionId().equals(tid));
+    			return locksOnPage.get(0).getTransactionId().equals(tid);
     		}
 		}
+    	
     }
     
-    public synchronized boolean tryAcquireXLock(TransactionId tid, PageId pid) {
-    	debug(tid, pid, "tryAcquireX");
-    	List<Lock> lockList = pid2Lock.get(pid);
+    private synchronized boolean tryAcquireXLock(TransactionId tid, PageId pid) {  	
+    	// debug(tid, pid, "tryAcquireX");
+    	List<Lock> lockList = pageLockMap.get(pid);
     	if (lockList == null) {
-    		pid2Lock.put(pid, new LinkedList<Lock>() {{
+    		pageLockMap.put(pid, new LinkedList<Lock>() {{
     			add(new Lock(LockMode.X, pid, tid));
     		}});
+    		debug(tid, pid, "tryAcquireX: no lock in cur page, true");
     		return true;
     	}
     	
+    	debug(tid, pid, "tryAcquireX: before lock locksOnPage");
     	synchronized (lockList) {
     		Lock firstLock = lockList.get(0);
+    		debug(tid, pid, "tryAcquireX: lock" + firstLock.getMode() + " on locksOnPage");
     		if (firstLock.isX()) {
-    			return firstLock.getPageId().equals(pid);
+    			debug(tid, pid, "tryAcquireX: is already hold X? " 
+    					+ firstLock.getTransactionId().equals(tid));
+    			return firstLock.getTransactionId().equals(tid);
     		} else {
-    			// upgrade
+    			if (!firstLock.getTransactionId().equals(tid)) { // others' RLock
+    				return false;
+    			}
+    			
+    			// own RLock, upgrade
+    			debug(tid, pid, "tryAcquireX: upgrade, is own RLock? " 
+    					+ firstLock.getTransactionId().equals(tid));
     			return upgrade(tid, pid);
     		}
     	}
@@ -96,29 +180,116 @@ public class LockManager {
     }
     
     public synchronized boolean releaseLock(TransactionId tid, PageId pid) {
-    	debug(tid, pid, "release");
-    	List<Lock> lockList = pid2Lock.get(pid);
-    	if (lockList == null) {
+    	boolean res = true;
+    	
+    	List<Lock> locksOnPage = pageLockMap.get(pid);
+    	if (locksOnPage == null) {
+    		debug(tid, pid, "already released in pageLockMap");
+    		res = false;
+    	}
+    	else {
+    	  	synchronized (locksOnPage) {
+	    		Predicate<Lock> sameTid = (lock) -> {
+	    			if (lock.getTransactionId().equals(tid)) {
+	    				debug(tid, pid, "release single lock in pageLockMap");
+	    				// pid.notifyAll();
+	    				return true;
+	    			}
+	    			return false;
+	    		};
+	    		res = res && locksOnPage.removeIf(sameTid);
+	    		
+	    		if (locksOnPage.isEmpty()) {
+	    			debug(tid, pid, "after release, no locks on this page");
+	    			pageLockMap.remove(pid, locksOnPage);
+	    		}
+			}
+    	}
+    	
+    	List<Lock> locksOnTxn = txnLockMap.get(tid);
+    	if (locksOnTxn == null) {
+    		debug(tid, pid, "already released in txnLockMap");
+    		res = false;
+    	}
+    	else {
+	    	synchronized (locksOnTxn) {
+	    		Predicate<Lock> samePid = (lock) -> {
+	    			if (lock.getPageId().equals(pid)) {
+	    				debug(tid, pid, "release single lock in txnLockMap");
+	    				return true;
+	    			}
+	    			return false;
+	    		};
+	    		res = res && locksOnTxn.removeIf(samePid);
+	    		
+	    		if (locksOnTxn.isEmpty()) {
+	    			debug(tid, pid, "after release, no locks on this txn");
+	    			txnLockMap.remove(tid, locksOnTxn);
+	    		}
+			}
+    	}
+    	
+    	return res;
+    }
+    
+    // release all locks belong to tid
+    public synchronized boolean releaseLocksOnTxn(TransactionId tid) {
+    	debug("release all locks of txn " + tid);
+    	List<Lock> locksOnTxn = txnLockMap.get(tid);
+    	if (locksOnTxn == null) {
     		return false;
     	}
     	
-    	synchronized (lockList) {
-    		Predicate<Lock> sameTid = (lock) -> {
-    			if (lock.getTransactionId().equals(tid)) {
-    				pid.notifyAll();
-    				return true;
-    			}
-    			return false;
-    		};
-    		return lockList.removeIf(sameTid);
+    	synchronized (locksOnTxn) {
+			for (Lock lock : locksOnTxn) {
+	    		releaseLock(lock);
+	    	}
+			
+			if (!locksOnTxn.isEmpty()) {
+				debug("==========Fail to Release Locks on Txn=========");
+				for (Lock lock : locksOnTxn) {
+		    		releaseLock(lock);
+		    	}
+				txnLockMap.remove(tid, locksOnTxn);
+				return false;
+			}
+			
+			return txnLockMap.remove(tid, locksOnTxn);
 		}
     }
     
+ // release all locks belong to pid
+    public synchronized boolean releaseLocksOnPage(PageId pid) {
+    	debug("release all locks of page " + pid);
+    	List<Lock> locksOnPage = pageLockMap.get(pid);
+    	if (locksOnPage == null) {
+    		return false;
+    	}
+    	
+    	synchronized (locksOnPage) {
+			for (Lock lock : locksOnPage) {
+	    		releaseLock(lock);
+	    	}
+			
+			if (!locksOnPage.isEmpty()) {
+				debug("==========Fail to Release Locks on Page=========");
+				for (Lock lock : locksOnPage) {
+		    		releaseLock(lock);
+		    	}
+				pageLockMap.remove(pid, locksOnPage);
+				return false;
+			}
+			
+			return pageLockMap.remove(pid, locksOnPage);
+		}
+    }
+    
+    // upgrade the lock pointed by <tid, pid> from S to X
     // if no such lock, or cannot upgrade (more than one S), return false
     // if already X, return true
-    public synchronized boolean upgrade(TransactionId tid, PageId pid) {
+    private synchronized boolean upgrade(TransactionId tid, PageId pid) {
     	debug(tid, pid, "upgrade");
-    	List<Lock> lockList = pid2Lock.get(pid);
+    	List<Lock> lockList = pageLockMap.get(pid);
     	if (lockList == null) {
     		return false;
     	}
@@ -129,19 +300,38 @@ public class LockManager {
     			if (lock.isX()) {
     				return lock.getTransactionId().equals(tid);
     			}
-    			if (++numRLock > 1) {
-    				return false;
+    			else { // RLock
+    				if (++numRLock > 1) {
+    					debug(tid, pid, "has more than one Rlock");
+        				return false;
+        			}
+    				if (!lock.getTransactionId().equals(tid)) { // has other RLock
+    					debug(tid, pid, "has other Rlock:" + lock);
+    					return false;
+    				}
     			}
     		}
-    		releaseLock(tid, pid);
-    		return tryAcquireXLock(tid, pid);
+    		
+    		if (numRLock != 1) {
+    			debug(tid, pid, "shoule be no lock on page, but has " +numRLock + "locks");
+    			return false;
+    		}
+    		
+    		if (lockList.get(0).getTransactionId().equals(tid)) {
+    			debug(tid, pid, "upgrade my own RLock");
+        		releaseLock(tid, pid);
+        		return tryAcquireLock(tid, pid, Permissions.READ_WRITE);
+    		}
+    		
+    		debug(tid, pid, "==========shoule never reach here===========");
+    		return false;
     	}
     }
     
     
-    public boolean holdsLock(TransactionId tid, PageId pid) {
+    public synchronized boolean holdsLock(TransactionId tid, PageId pid) {
     	debug(tid, pid, "holdslock");
-    	List<Lock> lockList = pid2Lock.get(pid);
+    	List<Lock> lockList = pageLockMap.get(pid);
     	if (lockList == null) {
     		return false;
     	}
@@ -158,10 +348,17 @@ public class LockManager {
     }
     
     public void debug(TransactionId tid, PageId pid, String s) {
-    	System.out.println("Tid:"+tid+" Pid:"+pid+" "+s);
+    	if (debug == 1 && tid.getId() != 0)
+    		System.out.println("Tid:"+tid+" Pid:"+pid+" "+s);
     }
     
     public void debug(Lock lock, String s) {
-    	System.out.println(lock + " " + s);
+    	if (debug == 1 && lock.getTransactionId().getId() != 0)
+    		System.out.println(lock + " " + s);
+    }
+    
+    public void debug(String s) {
+    	if (debug == 1)
+    		System.out.println(s);
     }
 }

@@ -14,13 +14,30 @@ public class LockMode {
 
   public String toString() {
     if (lockMode == 0)
-      return "Shared";
+      return "R";
     if (lockMode == 1)
-      return "Exclusive";
+      return "X";
     return "UNKNOWN";
   }
 
   public static final LockMode R = new LockMode(0);
   public static final LockMode X = new LockMode(1);
 
+  @Override
+  public boolean equals(Object o) {
+	if (o == this) return true;
+		
+	if (o instanceof LockMode) {		
+		LockMode another = (LockMode) o;
+		return this.toString().equals(another.toString());
+	}
+	
+	return false;
+  }
+	
+  @Override
+  public int hashCode() {
+	return lockMode;
+  }
+  
 }
