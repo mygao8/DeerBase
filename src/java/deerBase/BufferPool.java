@@ -99,7 +99,7 @@ public class BufferPool {
 			try {
 				TimeUnit.MILLISECONDS.sleep(10);
 				
-				if (++counter > 200) {
+				if (++counter > 2000) {
 					break;
 				}
 				
@@ -115,7 +115,7 @@ public class BufferPool {
 		}
 		//}
     	
-    	if (counter > 200) {
+    	if (counter > 2000) {
     		throw new TransactionAbortedException();
     	}
     	
@@ -181,7 +181,7 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      * @param pid the ID of the page to unlock
      */
-    public  void releasePage(TransactionId tid, PageId pid) {
+    public void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for proj1
     	

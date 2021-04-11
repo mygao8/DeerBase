@@ -6,27 +6,31 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
+// ref: 
 public class LRUCache {
-    class DLinkedNode {
-    	PageId key;
-        Page value;
-        DLinkedNode prev;
-        DLinkedNode next;
-        public DLinkedNode() {}
-        public DLinkedNode(PageId _key, Page _value) {key = _key; value = _value;}
+    class ListNode {
+    	PageId pId;
+        Page page;
+        ListNode prev;
+        ListNode next;
+        public ListNode() {}
+        public ListNode(PageId key, Page value) {
+        	this.pId = key; 
+        	this.page = value;
+        }
     }
 
-    private Map<PageId, DLinkedNode> cache = new HashMap<PageId, DLinkedNode>();
+    private Map<PageId, ListNode> cache = new HashMap<PageId, ListNode>();
     private int size;
     private int capacity;
-    private DLinkedNode head, tail;
+    private ListNode head, tail;
 
     public LRUCache(int capacity) {
         this.size = 0;
         this.capacity = capacity;
         // fake head and tail
-        head = new DLinkedNode();
-        tail = new DLinkedNode();
+        head = new ListNode();
+        tail = new ListNode();
         head.next = tail;
         tail.prev = head;
     }
@@ -41,12 +45,12 @@ public class LRUCache {
      * @return
      */
     public Page get(PageId key) {
-        DLinkedNode node = cache.get(key);
+        ListNode node = cache.get(key);
         if (node == null) {
             return null;
         }
         moveToHead(node);
-        return node.value;
+        return node.page;
     }
     
     
@@ -54,37 +58,43 @@ public class LRUCache {
      * 
      * @param key
      * @param value
+     * @throws DbException 
      */
-    public void put(PageId key, Page value) {
-        DLinkedNode node = cache.get(key);
+    public void put(PageId pId, Page page) throws DbException {
+        ListNode node = cache.get(pId);
         if (node == null) {
             // if key does not exist, create new node
-            DLinkedNode newNode = new DLinkedNode(key, value);
-            cache.put(key, newNode);
+            ListNode newNode = new ListNode(pId, page);
+            cache.put(pId, newNode);
             addToHead(newNode);
             ++size;
             if (size > capacity) {
             	// if full, delete tail from linked list
-                DLinkedNode tail = removeTail();
+                ListNode tail = getTail();
                 // if the removed page is dirty, flush to disk
-                if (tail.value.isDirty()) {
-                	try {
-                		flushPage(tail.key);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+                // but in No Steal, dirty pages cannot be flushed until the txn completed
+                int numDitryPages = 0;
+                while (tail.page.isDirty() && numDitryPages < capacity) {
+                	numDitryPages++;
+                	moveToHead(tail);
+                	tail = getTail();
                 }
             	
+                // full of dirty pages, stuck here
+                if (numDitryPages >= capacity) {
+                	throw new DbException("all pages in buffer are dirty");
+                }
+                
                 // delete the last accessed node from cache
             	//System.out.println("size=" + size + " capacity=" + capacity);
                 //System.out.println("remove page for " + tableName + " page #" + tail.key.pageNumber());
-                cache.remove(tail.key);
+                cache.remove(tail.pId);
                 --size;
             }
         }
         else {
             // if key exists, update the value and move to head
-            node.value = value;
+            node.page = page;
             moveToHead(node);
         }
     }
@@ -93,8 +103,8 @@ public class LRUCache {
      * 
      * @param pid
      */
-    public DLinkedNode remove(PageId pid) {
-    	DLinkedNode removedNode = cache.remove(pid);
+    public ListNode remove(PageId pid) {
+    	ListNode removedNode = cache.remove(pid);
     	if (removedNode == null) {
     		return null;
     	}
@@ -102,27 +112,31 @@ public class LRUCache {
     	return removedNode;
     }
     
-    private void addToHead(DLinkedNode node) {
+    private void addToHead(ListNode node) {
         node.prev = head;
         node.next = head.next;
         head.next.prev = node;
         head.next = node;
     }
 
-    private void removeNode(DLinkedNode node) {
+    private void removeNode(ListNode node) {
         node.prev.next = node.next;
         node.next.prev = node.prev;
     }
 
-    private void moveToHead(DLinkedNode node) {
+    private void moveToHead(ListNode node) {
         removeNode(node);
         addToHead(node);
     }
 
-    private DLinkedNode removeTail() {
-        DLinkedNode res = tail.prev;
+    private ListNode removeTail() {
+        ListNode res = tail.prev;
         removeNode(res);
         return res;
+    }
+    
+    private ListNode getTail() {
+        return res = tail.prev;
     }
     
     /**
@@ -133,7 +147,7 @@ public class LRUCache {
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
     	String tableName = Database.getCatalog().getTableName(tableFile.getTableId());
     	//System.out.println("flush page for " + tableName + " page #" + pid.pageNumber());
-    	Page flushedPage = cache.get(pid).value;
+    	Page flushedPage = cache.get(pid).page;
     	tableFile.writePage(flushedPage);
     	flushedPage.markDirty(false, null);
     }
@@ -143,11 +157,11 @@ public class LRUCache {
     }
     
     private class keyIterator implements Iterator<PageId>{
-    	private DLinkedNode curNode = head.next;
+    	private ListNode curNode = head.next;
     	
 		@Override
 		public boolean hasNext() {
-			return curNode.key != null;
+			return curNode.pId != null;
 		}
 
 		@Override
@@ -155,7 +169,7 @@ public class LRUCache {
 			if (!hasNext()) {
 				throw new NoSuchElementException();
 			}
-			PageId resPageId = curNode.key;
+			PageId resPageId = curNode.pId;
 			curNode = curNode.next;
 			return resPageId;
 		}
