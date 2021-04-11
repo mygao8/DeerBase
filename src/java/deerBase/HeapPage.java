@@ -303,7 +303,7 @@ public class HeapPage implements Page {
      * that did the dirtying
      */
     public void markDirty(boolean dirty, TransactionId tid) {
-    	dirtier = dirty ? tid : null;
+    	dirtier = tid;
     	isDirty = dirty;
     }
     

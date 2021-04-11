@@ -185,6 +185,11 @@ public class BufferPool {
         // some code goes here
         // not necessary for proj1
     	
+    	// why passing tid in
+    	releasePage(pid);
+    }
+    
+    public void releasePage(PageId pid) {    	
     	Database.getLockManager().releaseLocksOnPage(pid);
     }
 
@@ -220,8 +225,33 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for proj1
-    	
+    	if (commit) {
+    		// flush
+    		flushPages(tid);
+    	} else {
+    		// re-read
+        	List<PageId> pIds = Database.getLockManager().getPageIdsOnTransactionId(tid);
+        	
+        	pIds.stream()
+        		.forEach(pId -> {
+        			discardPage(pId);
+        			readPage(pId);
+        		});   
+    	}
+    	// release all locks on tid
     	transactionComplete(tid);
+    }
+    
+    private Page readPage(PageId pid) {
+    	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
+    	Page resPage = dbFile.readPage(pid);
+    	try {
+			pageMap.put(pid, resPage);
+		} catch (DbException e) {
+			e.printStackTrace();
+		}
+    	numUsedPages++;
+        return resPage;
     }
     
     /**
@@ -298,6 +328,7 @@ public class BufferPool {
     */
     public synchronized void discardPage(PageId pid) {
     	pageMap.remove(pid);
+    	numUsedPages--;
     }
 
     /**
@@ -309,16 +340,29 @@ public class BufferPool {
     	Page flushedPage = pageMap.get(pid);
     	tableFile.writePage(flushedPage);
     	flushedPage.markDirty(false, null);
+    	releasePage(pid);
     }
     
 
     /** Write all pages of the specified transaction to disk.
      */
-    public synchronized  void flushPages(TransactionId tid) throws IOException {
+    public synchronized void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for proj1
+    	
+    	List<PageId> pIds = Database.getLockManager().getPageIdsOnTransactionId(tid);
+    	
+    	pIds.stream()
+	    	.forEach(pId -> {
+				try {
+					flushPage(pId);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			});
     }
-
+    
+    
     /**
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.

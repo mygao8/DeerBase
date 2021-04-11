@@ -136,7 +136,7 @@ public class LRUCache {
     }
     
     private ListNode getTail() {
-        return res = tail.prev;
+        return tail.prev;
     }
     
     /**

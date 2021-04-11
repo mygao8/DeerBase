@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 public class LockManager {
 	// keep track of all locks holden by specific tid
@@ -33,8 +35,19 @@ public class LockManager {
     	return pageLockMap.get(pid);
     }
     
-    private synchronized List<Lock> getLocksInTransation(TransactionId tid) {
+    private synchronized List<Lock> getLocksOnTransation(TransactionId tid) {
     	return txnLockMap.get(tid);
+    }
+    
+    // used for flush pages belong to tid when txn commits
+    public synchronized List<PageId> getPageIdsOnTransactionId (TransactionId tid) {    	
+    	List<Lock> locksOnTxn = getLocksOnTransation(tid);
+    	List<PageId> res = locksOnTxn.stream()
+    			.map(Lock::getPageId)
+    			.distinct()
+    			.collect(Collectors.toList());
+    	
+    	return res;
     }
     
     // the unique API to acquire lock for other classes
