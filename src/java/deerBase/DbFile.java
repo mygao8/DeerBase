@@ -19,7 +19,7 @@ public abstract class DbFile implements Serializable {
 	private final TupleDesc td;
 	private volatile int numPages;
 	private final int fileId;
-	private volatile ArrayList<Byte> notFullPages;
+	private volatile Vector<Byte> notFullPages;
 	
     /**
      * Constructs a database file backed by the specified file.
@@ -33,14 +33,14 @@ public abstract class DbFile implements Serializable {
 		this.f = f;
     	this.numPages = (int) (f.length() / BufferPool.getPageSize());
     	this.fileId = f.getAbsoluteFile().hashCode();
-    	this.notFullPages = new ArrayList<Byte>(Collections.nCopies(numPages/8 + 1, (byte) 0));
+    	this.notFullPages = new Vector<Byte>(Collections.nCopies(numPages/8 + 1, (byte) 0));
     } 
 	
     // only used for unit test, SkeletonFile
     public DbFile (int tableId) {
     	this.td = null;
 		this.fileId = tableId;
-    	this.notFullPages = new ArrayList<Byte>(Arrays.asList((byte) 0));
+    	this.notFullPages = new Vector<Byte>(Arrays.asList((byte) 0));
 	}
     
     /**
@@ -132,7 +132,7 @@ public abstract class DbFile implements Serializable {
     	return this.fileId;
     }
     
-    public ArrayList<Byte> getNotFullPagesList() {
+    public Vector<Byte> getNotFullPagesList() {
 		return this.notFullPages;
 	}
     
@@ -156,6 +156,8 @@ public abstract class DbFile implements Serializable {
      */
     public synchronized boolean isFullPage (int pageIdx) {
     	// if the first 18 pages are used, notFullPages looks like [11111111, 11111111, 00000011, ...]
+    	
+    	
     	int slotIdx = pageIdx/8;
 
     	if (((notFullPages.get(slotIdx) >>> (pageIdx%8)) & 0x01) == 1) {

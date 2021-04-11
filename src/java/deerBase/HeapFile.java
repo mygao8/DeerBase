@@ -90,14 +90,13 @@ public class HeapFile extends DbFile {
 	    		setNumPages(getNumPages() + 1);
 	    		setNotFullPagesList(pageNo, false);
     		}
+    		HeapPage heapPage  = 
+    				(HeapPage) Database.getBufferPool()
+    				.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
+    		heapPage.insertTuple(t);
+    		heapPage.markDirty(true, tid);
+    		resPages.add(heapPage);
 		}
-    	
-		HeapPage heapPage  = 
-				(HeapPage) Database.getBufferPool()
-				.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
-		heapPage.insertTuple(t);
-		heapPage.markDirty(true, tid);
-		resPages.add(heapPage);
 		
     	return resPages;
     }

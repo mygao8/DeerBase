@@ -262,7 +262,7 @@ public class HeapPage implements Page {
     	tuples[recordId.getTupleNo()] = null;
     	markSlotUsed(recordId.getTupleNo(), false);
     	Database.getCatalog().getDbFile(pid.getTableId())
-		.setNotFullPagesList(pid.pageNumber(), false);
+			.setNotFullPagesList(pid.pageNumber(), false);
     }
 
     /**
