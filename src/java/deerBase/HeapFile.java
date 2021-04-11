@@ -76,31 +76,29 @@ public class HeapFile extends DbFile {
     */
     public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, TransactionAbortedException {
+    	
     	ArrayList<Page> resPages = new ArrayList<Page>();
     	
-    	int pageNo = 0;
-    	for (pageNo = 0; pageNo < getNumPages(); pageNo++) {
-    		if (!isFullPage(pageNo)) {
-    			HeapPage heapPage  = (HeapPage) Database.getBufferPool()
-    					.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
-    			heapPage.insertTuple(t);
-    			heapPage.markDirty(true, tid);
-    			resPages.add(heapPage);
-    			break;
+    	int pageNo;
+    	synchronized (this) {
+    		for (pageNo = 0; pageNo < getNumPages(); pageNo++) {
+        		if (!isFullPage(pageNo)) {		
+        			break;
+        		}
+        	}
+    		if (pageNo == getNumPages()) {
+	    		setNumPages(getNumPages() + 1);
+	    		setNotFullPagesList(pageNo, false);
     		}
-    	}
+		}
     	
-    	if (pageNo == getNumPages()) {
-    		// add new page
-    		HeapPage newPage = (HeapPage) Database.getBufferPool()
-					.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
-    		setNumPages(getNumPages() + 1);
-    		setNotFullPagesList(pageNo, false);
-    		newPage.insertTuple(t);
-    		newPage.markDirty(true, tid);
-    		resPages.add(newPage);
-    	}
-    	
+		HeapPage heapPage  = 
+				(HeapPage) Database.getBufferPool()
+				.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
+		heapPage.insertTuple(t);
+		heapPage.markDirty(true, tid);
+		resPages.add(heapPage);
+		
     	return resPages;
     }
 
@@ -117,11 +115,15 @@ public class HeapFile extends DbFile {
             TransactionAbortedException {
     	ArrayList<Page> resPages = new ArrayList<Page>();
     	PageId pageId = t.getRecordId().getPageId();
-    	HeapPage heapPage = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
+    	HeapPage heapPage = 
+    			(HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
     	heapPage.deleteTuple(t);
     	heapPage.markDirty(true, tid);
-    	setNotFullPagesList(pageId.pageNumber(), false);
     	resPages.add(heapPage);
+    	
+    	
+    	setNotFullPagesList(pageId.pageNumber(), false);
+    	
     	return resPages;
     }
 
@@ -166,7 +168,7 @@ public class HeapFile extends DbFile {
     			return true;
     		} else {
     			// curPage is done, try to load the next page
-    			this.curPgNo += 1;
+    			this.curPgNo ++;
         		if (this.curPgNo < getNumPages()) {
         			this.setCurPageItr(this.curPgNo);
         			return this.pageItr.hasNext();
@@ -190,8 +192,8 @@ public class HeapFile extends DbFile {
     	private void setCurPageItr(int pgNo) 
     			throws DbException, TransactionAbortedException {
     		PageId pId = (PageId) new HeapPageId(tableId, pgNo);
-    		HeapPage curPage = (HeapPage) Database.getBufferPool().
-    				getPage(tid, pId, Permissions.READ_ONLY);
+    		HeapPage curPage = 
+    				(HeapPage) Database.getBufferPool().getPage(tid, pId, Permissions.READ_ONLY);
     		this.pageItr = curPage.iterator();
     	}
     	

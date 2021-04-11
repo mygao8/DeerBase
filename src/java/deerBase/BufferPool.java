@@ -241,6 +241,7 @@ public class BufferPool {
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, TransactionAbortedException, IOException {
     	DbFile table = Database.getCatalog().getDbFile(tableId);
+    	
     	ArrayList<Page> ditryPages = table.insertTuple(tid, t);
     	for (Page page : ditryPages) {
     		page.markDirty(true, tid);

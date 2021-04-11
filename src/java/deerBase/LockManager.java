@@ -14,7 +14,7 @@ public class LockManager {
 	// store which transactions hold this shared lock
     private ConcurrentMap<PageId, List<Lock>> pageLockMap;
     
-    int debug = 1;
+    int debug = 0;
     
     public LockManager() {
     	txnLockMap = new ConcurrentHashMap<>();

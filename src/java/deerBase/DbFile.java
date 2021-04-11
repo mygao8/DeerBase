@@ -17,9 +17,9 @@ public abstract class DbFile implements Serializable {
 	
 	private File f;
 	private final TupleDesc td;
-	private int numPages;
+	private volatile int numPages;
 	private final int fileId;
-	private ArrayList<Byte> notFullPages;
+	private volatile ArrayList<Byte> notFullPages;
 	
     /**
      * Constructs a database file backed by the specified file.
@@ -111,7 +111,7 @@ public abstract class DbFile implements Serializable {
     	return this.numPages;
     }
     
-    public int setNumPages(int numPages) {
+    public synchronized int setNumPages(int numPages) {
     	return this.numPages = numPages;
     }
     
@@ -136,7 +136,7 @@ public abstract class DbFile implements Serializable {
 		return this.notFullPages;
 	}
     
-    public void setNotFullPagesList(int pageIdx, boolean isFull) {
+    public synchronized void setNotFullPagesList(int pageIdx, boolean isFull) {
     	int slotIdx = pageIdx/8;
     	byte mask = (byte) (1 << (pageIdx%8));
     	
@@ -154,7 +154,7 @@ public abstract class DbFile implements Serializable {
     /**
      * Returns true if associated page on this file is full.
      */
-    public boolean isFullPage (int pageIdx) {
+    public synchronized boolean isFullPage (int pageIdx) {
     	// if the first 18 pages are used, notFullPages looks like [11111111, 11111111, 00000011, ...]
     	int slotIdx = pageIdx/8;
 
