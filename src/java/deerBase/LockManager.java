@@ -192,13 +192,57 @@ public class LockManager {
     	return releaseLock(lock.getTransactionId(), lock.getPageId());
     }
     
-    public synchronized boolean releaseLock(TransactionId tid, PageId pid) {
-    	boolean res = true;
-    	
-    	List<Lock> locksOnPage = pageLockMap.get(pid);
+    public synchronized boolean releaseLock(TransactionId tid, PageId pid) {   	
+    	return removeLockFromPageLockMap(tid, pid) 
+    			&& removeLockFromTxnLockMap(tid, pid);
+    }
+    
+    private boolean removeLockFromTxnLockMap(Lock lock) {
+    	return removeLockFromTxnLockMap(lock.getTransactionId(), lock.getPageId());
+    }
+
+    // return false if failed to remove lock from list or remove key from map
+	private boolean removeLockFromTxnLockMap(TransactionId tid, PageId pid) {
+		
+		List<Lock> locksOnTxn = txnLockMap.get(tid);
+    	if (locksOnTxn == null) {
+    		debug(tid, pid, "already released in txnLockMap");
+    		return false;
+    	}
+    	else {
+    		boolean res;
+	    	synchronized (locksOnTxn) {
+	    		Predicate<Lock> samePid = (lock) -> {
+	    			if (lock.getPageId().equals(pid)) {
+	    				debug(tid, pid, "release single lock in txnLockMap");
+	    				return true;
+	    			}
+	    			return false;
+	    		};
+	    		
+	    		res = locksOnTxn.removeIf(samePid);
+	    		
+	    		if (locksOnTxn.isEmpty()) {
+	    			debug(tid, pid, "after release, no locks on this txn");
+	    			res = res && txnLockMap.remove(tid, locksOnTxn);
+	    		}
+			}
+			return res;
+    	}
+	}
+
+	private boolean removeLockFromPageLockMap(Lock lock) {
+		return removeLockFromPageLockMap(lock.getTransactionId(), lock.getPageId());
+	}
+	
+	// return false if failed to remove lock from list or remove key from map
+	private boolean removeLockFromPageLockMap(TransactionId tid, PageId pid) {
+		boolean res;
+		
+		List<Lock> locksOnPage = pageLockMap.get(pid);
     	if (locksOnPage == null) {
     		debug(tid, pid, "already released in pageLockMap");
-    		res = false;
+    		return false;
     	}
     	else {
     	  	synchronized (locksOnPage) {
@@ -210,40 +254,16 @@ public class LockManager {
 	    			}
 	    			return false;
 	    		};
-	    		res = res && locksOnPage.removeIf(sameTid);
+	    		res = locksOnPage.removeIf(sameTid);
 	    		
 	    		if (locksOnPage.isEmpty()) {
 	    			debug(tid, pid, "after release, no locks on this page");
-	    			pageLockMap.remove(pid, locksOnPage);
+	    			res = res && pageLockMap.remove(pid, locksOnPage);
 	    		}
 			}
     	}
-    	
-    	List<Lock> locksOnTxn = txnLockMap.get(tid);
-    	if (locksOnTxn == null) {
-    		debug(tid, pid, "already released in txnLockMap");
-    		res = false;
-    	}
-    	else {
-	    	synchronized (locksOnTxn) {
-	    		Predicate<Lock> samePid = (lock) -> {
-	    			if (lock.getPageId().equals(pid)) {
-	    				debug(tid, pid, "release single lock in txnLockMap");
-	    				return true;
-	    			}
-	    			return false;
-	    		};
-	    		res = res && locksOnTxn.removeIf(samePid);
-	    		
-	    		if (locksOnTxn.isEmpty()) {
-	    			debug(tid, pid, "after release, no locks on this txn");
-	    			txnLockMap.remove(tid, locksOnTxn);
-	    		}
-			}
-    	}
-    	
-    	return res;
-    }
+		return res;
+	}
     
     // release all locks belong to tid
     public synchronized boolean releaseLocksOnTxn(TransactionId tid) {
@@ -254,18 +274,7 @@ public class LockManager {
     	}
     	
     	synchronized (locksOnTxn) {
-			for (Lock lock : locksOnTxn) {
-	    		releaseLock(lock);
-	    	}
-			
-			if (!locksOnTxn.isEmpty()) {
-				debug("==========Fail to Release Locks on Txn=========");
-				for (Lock lock : locksOnTxn) {
-		    		releaseLock(lock);
-		    	}
-				txnLockMap.remove(tid, locksOnTxn);
-				return false;
-			}
+    		locksOnTxn.forEach(lock -> removeLockFromPageLockMap(lock));
 			
 			return txnLockMap.remove(tid, locksOnTxn);
 		}
@@ -280,18 +289,7 @@ public class LockManager {
     	}
     	
     	synchronized (locksOnPage) {
-			for (Lock lock : locksOnPage) {
-	    		releaseLock(lock);
-	    	}
-			
-			if (!locksOnPage.isEmpty()) {
-				debug("==========Fail to Release Locks on Page=========");
-				for (Lock lock : locksOnPage) {
-		    		releaseLock(lock);
-		    	}
-				pageLockMap.remove(pid, locksOnPage);
-				return false;
-			}
+    		locksOnPage.forEach(lock -> removeLockFromTxnLockMap(lock));
 			
 			return pageLockMap.remove(pid, locksOnPage);
 		}
