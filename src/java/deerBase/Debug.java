@@ -1,6 +1,8 @@
 
 package deerBase;
 
+import java.util.Arrays;
+
 /**
  * Debug is a utility class that wraps println statements and allows
  * more or less command line output to be turned on.
@@ -13,12 +15,12 @@ package deerBase;
  */
 
 public class Debug {
-  private static final int DEBUG_LEVEL;
+  private static final int DEBUG_LEVEL; // now: 1 for all (deerbase and test), 0 for deerbase
   static {
       String debug = System.getProperty("deerBase.Debug");
       if (debug == null) {
           // No system property = disabled
-          DEBUG_LEVEL = -1;
+          DEBUG_LEVEL = 1; // should be null
       } else if (debug == "") {
           // Empty property = level 0
           DEBUG_LEVEL = 0;
@@ -27,7 +29,10 @@ public class Debug {
       }
   }
 
+  private static final int DEFAULT_STACK_TRACE_DEPTH = 5;
   private static final int DEFAULT_LEVEL = 0;
+  public static final int DEER_BASE = 0;
+  public static final int TEST = 1;
 
   /** Log message if the log level >= level. Uses printf. */
   public static void log(int level, String message, Object... args) {
@@ -50,5 +55,20 @@ public class Debug {
   /** Logs message at the default log level. */
   public static void log(String message, Object... args) {
     log(DEFAULT_LEVEL, message, args);
+  }
+  
+  public static String stackTrace(int depth) {
+	  // from 2 to depth+2, to remove getStackTrace(Thread.java), stackTrace(Debug.java)
+	  return '\n' + Arrays.toString(
+			  Arrays.copyOfRange(
+					  Thread.currentThread().getStackTrace(), 2, depth+2
+					  ));
+  }
+  
+  public static String stackTrace() {
+	  return '\n' + Arrays.toString(
+			  Arrays.copyOfRange(
+					  Thread.currentThread().getStackTrace(), 2, DEFAULT_STACK_TRACE_DEPTH+2
+					  ));
   }
 }

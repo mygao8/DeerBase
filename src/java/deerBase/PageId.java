@@ -36,5 +36,7 @@ public interface PageId {
     public boolean equals(Object o);
 
     public int pageNumber();
+    
+    public String toString();
 }
 

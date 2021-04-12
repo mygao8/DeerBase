@@ -18,21 +18,30 @@ public class LRUCache {
         	this.pId = key; 
         	this.page = value;
         }
+        
+        public String toString() {
+        	if (page == null && pId == null) return String.valueOf(hashCode()).substring(0, 4);
+        	if (page == null || pId == null) return "!!!wrong node: one of pId and page is null!!!";
+        	
+        	return pId.toString();
+        }
     }
 
     private Map<PageId, ListNode> cache = new HashMap<PageId, ListNode>();
     private int size;
     private int capacity;
-    private ListNode head, tail;
+    private final ListNode dummyHead, dummyTail;
+    private int evictionPolicy = 1;
+    private static final int NOSTEAL = 1;
 
     public LRUCache(int capacity) {
         this.size = 0;
         this.capacity = capacity;
         // fake head and tail
-        head = new ListNode();
-        tail = new ListNode();
-        head.next = tail;
-        tail.prev = head;
+        dummyHead = new ListNode();
+        dummyTail = new ListNode();
+        dummyHead.next = dummyTail;
+        dummyTail.prev = dummyHead;
     }
 
     public boolean containsKey (PageId key) {
@@ -44,8 +53,9 @@ public class LRUCache {
      * @param key
      * @return
      */
-    public Page get(PageId key) {
-        ListNode node = cache.get(key);
+    public Page get(PageId pId) {
+    	Debug.log("get page%d. in cache?%b 	%s", pId.pageNumber(), cache.containsKey(pId), Debug.stackTrace());
+        ListNode node = cache.get(pId);
         if (node == null) {
             return null;
         }
@@ -61,42 +71,78 @@ public class LRUCache {
      * @throws DbException 
      */
     public void put(PageId pId, Page page) throws DbException {
+    	if (pId == null || page == null) {
+    		Debug.log("put null pid/page in cache %s", Debug.stackTrace());
+    		return;
+    	}
+    	Debug.log("put page%d in cache 	%s", pId.pageNumber(), Debug.stackTrace());
         ListNode node = cache.get(pId);
         if (node == null) {
             // if key does not exist, create new node
             ListNode newNode = new ListNode(pId, page);
-            cache.put(pId, newNode);
-            addToHead(newNode);
-            ++size;
-            if (size > capacity) {
-            	// if full, delete tail from linked list
+            
+            if (size == capacity) {
+            	// if full, try to delete tail from linked list
                 ListNode tail = getTail();
-                // if the removed page is dirty, flush to disk
-                // but in No Steal, dirty pages cannot be flushed until the txn completed
-                int numDitryPages = 0;
-                while (tail.page.isDirty() && numDitryPages < capacity) {
-                	numDitryPages++;
-                	moveToHead(tail);
-                	tail = getTail();
-                }
-            	
-                // full of dirty pages, stuck here
-                if (numDitryPages >= capacity) {
-                	throw new DbException("all pages in buffer are dirty");
+                
+                // (if the removed page is dirty, flush to disk) when Steal policy
+                // NO STEAL dirty pages cannot be flushed until the txn completed
+                if (evictionPolicy == LRUCache.NOSTEAL) {
+	                int numDitryPages = 0;
+	                while (tail.page.isDirty() && numDitryPages < capacity) {
+	                	numDitryPages++;
+	                	moveToHead(tail);
+	                	tail = getTail();
+	                }
+	                Debug.log("full cache, evict %d: dirty=%d / cap=%d", 
+	                		tail.pId.pageNumber(), numDitryPages, capacity);
+	                // full of dirty pages, will be stuck here
+	                if (numDitryPages >= capacity) {
+	                	throw new DbException("all pages in buffer are dirty");
+	                }
                 }
                 
                 // delete the last accessed node from cache
             	//System.out.println("size=" + size + " capacity=" + capacity);
                 //System.out.println("remove page for " + tableName + " page #" + tail.key.pageNumber());
-                cache.remove(tail.pId);
+                remove(tail.pId);
                 --size;
             }
+            
+            cache.put(pId, newNode);
+            addToHead(newNode);
+            ++size;
+//            if (size > capacity) {
+//            	// if full, delete tail from linked list
+//                ListNode tail = getTail();
+//                // if the removed page is dirty, flush to disk
+//                // but in No Steal, dirty pages cannot be flushed until the txn completed
+//                int numDitryPages = 0;
+//                while (tail.page.isDirty() && numDitryPages < capacity) {
+//                	numDitryPages++;
+//                	moveToHead(tail);
+//                	tail = getTail();
+//                }
+//            	
+//                // full of dirty pages, stuck here
+//                if (numDitryPages >= capacity) {
+//                	throw new DbException("all pages in buffer are dirty");
+//                }
+//                
+//                // delete the last accessed node from cache
+//            	//System.out.println("size=" + size + " capacity=" + capacity);
+//                //System.out.println("remove page for " + tableName + " page #" + tail.key.pageNumber());
+//                cache.remove(tail.pId);
+//                --size;
+//            }
         }
         else {
             // if key exists, update the value and move to head
             node.page = page;
             moveToHead(node);
         }
+        Debug.log("after put page%d now in cache: %s	%s",
+        		pId.pageNumber(), cacheToString(), Debug.stackTrace());
     }
 
     /** Remove the element associated with key pid, without write to disk or check dirty
@@ -112,11 +158,30 @@ public class LRUCache {
     	return removedNode;
     }
     
+    private String cacheToString() {
+    	StringBuilder sb = new StringBuilder('\n');
+    	sb.append("[dummy:"+dummyHead+"] ");
+    	ListNode cur = dummyHead;
+    	while (cur != null) {
+    		sb.append(cur);
+    		cur = cur.next;
+    		if (cur != null) {
+    			sb.append("->");
+    		}
+    	}
+    	sb.append(" [dummy:"+dummyTail+"] ");
+    	return sb.toString();
+    }
+    
+    public void printCache() {
+    	Debug.log(cacheToString());
+    }
+    
     private void addToHead(ListNode node) {
-        node.prev = head;
-        node.next = head.next;
-        head.next.prev = node;
-        head.next = node;
+        node.prev = dummyHead;
+        node.next = dummyHead.next;
+        dummyHead.next.prev = node;
+        dummyHead.next = node;
     }
 
     private void removeNode(ListNode node) {
@@ -130,13 +195,13 @@ public class LRUCache {
     }
 
     private ListNode removeTail() {
-        ListNode res = tail.prev;
+        ListNode res = dummyTail.prev;
         removeNode(res);
         return res;
     }
     
     private ListNode getTail() {
-        return tail.prev;
+        return dummyTail.prev;
     }
     
     /**
@@ -157,7 +222,7 @@ public class LRUCache {
     }
     
     private class keyIterator implements Iterator<PageId>{
-    	private ListNode curNode = head.next;
+    	private ListNode curNode = dummyHead.next;
     	
 		@Override
 		public boolean hasNext() {

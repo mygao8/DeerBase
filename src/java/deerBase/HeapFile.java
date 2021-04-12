@@ -90,11 +90,14 @@ public class HeapFile extends DbFile {
 			heapPage = 
 					(HeapPage) Database.getBufferPool()
 					.getPage(tid, checkedPid, Permissions.READ_ONLY);
+			
+			Debug.log("insert find page%d: isFull?%b", pageNo, heapPage.isFull());
 			if (!heapPage.isFull()) {
 				// find a not-full page, XLock for insert
 				heapPage = 
 						(HeapPage) Database.getBufferPool()
 						.getPage(tid, checkedPid, Permissions.READ_WRITE);
+				break;
 			} else {
 				// optimization: break strict 2PL
 				Database.getBufferPool().releasePage(checkedPid);
@@ -139,6 +142,7 @@ public class HeapFile extends DbFile {
 			}
 		}
 		
+		Debug.log("page%d insert", pageNo);
 		heapPage.insertTuple(t);
 		heapPage.markDirty(true, tid);
 		resPages.add(heapPage);

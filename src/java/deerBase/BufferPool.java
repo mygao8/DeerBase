@@ -171,6 +171,15 @@ public class BufferPool {
     	numUsedPages++;
         return resPage;
     }
+    
+    
+    /** Return true if the specified transaction has a lock on the specified page */
+    public boolean holdsLock(TransactionId tid, PageId pid) {
+        // some code goes here
+        // not necessary for proj1
+        
+    	return Database.getLockManager().holdsLock(tid, pid);
+    }
 
     /**
      * Releases the lock on a page.
@@ -193,25 +202,18 @@ public class BufferPool {
     	Database.getLockManager().releaseLocksOnPage(pid);
     }
 
+    
     /**
-     * Release all locks associated with a given transaction.
+     * Default: commit
+     * Flush pages and Release all locks associated with a given transaction.
      *
      * @param tid the ID of the transaction requesting the unlock
      */
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for proj1
-    	
-    	Database.getLockManager().releaseLocksOnTxn(tid);   	
-    	
-    }
-    
-    /** Return true if the specified transaction has a lock on the specified page */
-    public boolean holdsLock(TransactionId tid, PageId pid) {
-        // some code goes here
-        // not necessary for proj1
-        
-    	return Database.getLockManager().holdsLock(tid, pid);
+    	  	
+    	transactionComplete(tid, true);
     }
     
     /**
@@ -235,14 +237,18 @@ public class BufferPool {
         	pIds.stream()
         		.forEach(pId -> {
         			discardPage(pId);
-        			readPage(pId);
+        			getPageWithoutLock(pId);
         		});   
     	}
     	// release all locks on tid
-    	transactionComplete(tid);
+    	Database.getLockManager().releaseLocksOnTxn(tid);
     }
     
-    private Page readPage(PageId pid) {
+    private Page getPageWithoutLock(PageId pid) {
+    	if (cache.containsKey(pid)) {
+    		return cache.get(pid);
+    	}
+    	
     	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page resPage = dbFile.readPage(pid);
     	try {
@@ -308,45 +314,6 @@ public class BufferPool {
 	    	numUsedPages++;
     	}
     }
-
-    /**
-     * Flush all dirty pages to disk.
-     * NB: Be careful using this routine -- it writes dirty data to disk so will
-     *     break deerBase if running in NO STEAL mode.
-     */
-    public synchronized void flushAllPages() throws IOException {
-    	Iterator<PageId> pidItr = cache.keyIterator();
-    	while (pidItr.hasNext()) {
-			flushPage(pidItr.next());
-		}
-    }
-
-    /** Remove the specific page id from the buffer pool.
-        Needed by the recovery manager to ensure that the
-        buffer pool doesn't keep a rolled back page in its
-        cache.
-    */
-    public synchronized void discardPage(PageId pid) {
-    	cache.remove(pid);
-    	numUsedPages--;
-    }
-
-    /**
-     * Flushes a certain page to disk
-     * @param pid an ID indicating the page to flush
-     */
-    private synchronized void flushPage(PageId pid) throws IOException {
-    	if (pid == null || !cache.containsKey(pid)) {
-    		String containsOrNot = pid == null ? "contains" : "does not contain";
-    		throw new IllegalArgumentException("cache" + containsOrNot + " (PageId:"+pid+")");
-    	}
-    	
-    	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
-    	Page flushedPage = cache.get(pid);
-    	// flushedPage may be null when pid is not in pageMap (i.e. LRU cache)
-    	tableFile.writePage(flushedPage);
-    	flushedPage.markDirty(false, null);
-    }
     
 
     /** Write all pages of the specified transaction to disk.
@@ -369,6 +336,46 @@ public class BufferPool {
 			});
     }
     
+    /**
+     * Flushes a certain page to disk
+     * @param pid an ID indicating the page to flush
+     */
+    private synchronized void flushPage(PageId pid) throws IOException {
+    	if (pid == null || !cache.containsKey(pid)) {
+    		String containsOrNot = pid == null ? "contains" : "does not contain";
+    		throw new IllegalArgumentException("cache" + containsOrNot + " (PageId:"+pid+")");
+    	}
+    	
+    	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
+    	Page flushedPage = cache.remove(pid).page;
+    	
+    	// flushedPage may be null when pid is not in pageMap (i.e. LRU cache)
+    	tableFile.writePage(flushedPage);
+    	flushedPage.markDirty(false, null);
+    }
+    
+    /**
+     * Flush all dirty pages to disk.
+     * NB: Be careful using this routine -- it writes dirty data to disk so will
+     *     break deerBase if running in NO STEAL mode.
+     */
+    public synchronized void flushAllPages() throws IOException {
+    	Iterator<PageId> pidItr = cache.keyIterator();
+    	while (pidItr.hasNext()) {
+			flushPage(pidItr.next());
+		}
+    }
+    
+    
+    /** Remove the specific page id from the buffer pool.
+        Needed by the recovery manager to ensure that the
+        buffer pool doesn't keep a rolled back page in its
+        cache.
+    */
+    public synchronized void discardPage(PageId pid) {
+    	cache.remove(pid);
+    	numUsedPages--;
+    }
     
     /**
      * Discards a page from the buffer pool.

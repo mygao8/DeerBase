@@ -77,7 +77,7 @@ public class HeapPageId implements PageId {
     }
     
     public String toString() {
-    	return "Table" + tableId + " Page" + pgNo;
+    	return "[Table" + tableId + " Page" + pgNo +"]";
     }
 
 }
