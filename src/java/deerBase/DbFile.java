@@ -154,7 +154,7 @@ public abstract class DbFile implements Serializable {
     /**
      * Returns true if associated page on this file is full.
      */
-    public synchronized boolean isFullPage (int pageIdx) {
+    public boolean isFullPage (int pageIdx) {
     	// if the first 18 pages are used, notFullPages looks like [11111111, 11111111, 00000011, ...]
     	
     	

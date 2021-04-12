@@ -280,7 +280,7 @@ public class HeapPage implements Page {
     	if (!td.equals(t.getTupleDesc())) {
     		throw new DbException("tupleDsec is not matched");
     	}
-    	
+    	    	
     	for (int i = 0; i < numSlots; i++) {
     		if (!isSlotUsed(i)) {
     			tuples[i] = t;
@@ -340,6 +340,10 @@ public class HeapPage implements Page {
     	return this.numSlots - numUsedSlots;
     }
 
+    public boolean isFull() {
+    	return getNumEmptySlots() == 0;
+    }
+    
     /**
      * Returns true if associated slot on this page is filled.
      */

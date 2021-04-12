@@ -61,8 +61,93 @@ public class HeapFile extends DbFile {
         return this.td;
     }
 
-
     /**
+     * Thread-Safe: Maybe do a research? lock on notFullList || scan page with RLock
+     * 
+     * Inserts the specified tuple to the file on behalf of transaction.
+     * This method will acquire a lock on the affected pages of the file, and
+     * may block until the lock can be acquired.
+     *
+     * @param tid The transaction performing the update
+     * @param t The tuple to add.  This tuple should be updated to reflect that
+     *          it is now stored in this file.
+     * @return An ArrayList contain the pages that were modified
+     * @throws TransactionAbortedException 
+     * @throws DbException if the tuple cannot be added
+     * @throws IOException if the needed file can't be read/written
+     */
+    public ArrayList<Page> insertTuple(TransactionId tid, Tuple t) 
+    		throws TransactionAbortedException, DbException {
+    	
+    	ArrayList<Page> resPages = new ArrayList<Page>();
+    	
+    	int pageNo;
+    	HeapPage heapPage = null;
+    	// multi thread version: have to fetch page first to check not full
+		for (pageNo = 0; pageNo < getNumPages(); pageNo++) {
+			// check not full, but this page can be inserted this time
+			PageId checkedPid = new HeapPageId(tableId, pageNo);
+			heapPage = 
+					(HeapPage) Database.getBufferPool()
+					.getPage(tid, checkedPid, Permissions.READ_ONLY);
+			if (!heapPage.isFull()) {
+				// find a not-full page, XLock for insert
+				heapPage = 
+						(HeapPage) Database.getBufferPool()
+						.getPage(tid, checkedPid, Permissions.READ_WRITE);
+			} else {
+				// optimization: break strict 2PL
+				Database.getBufferPool().releasePage(checkedPid);
+				
+				// if all pages full, require a new page
+				// file level lock
+				if (pageNo == getNumPages()-1) {
+					synchronized (this) {
+						if (pageNo == getNumPages()-1) {
+							// the tuples of last page cannot be deleted by other txns
+							// if we hold RLock, but hold RLock and get file lock may 
+							// increase the frequency of deadlock
+							
+							// choose to release before getting file lock
+//							if (!heapPage.isFull()) {
+							// give up: here may become full
+//								heapPage = 
+//										(HeapPage) Database.getBufferPool()
+//										.getPage(tid, checkedPid, Permissions.READ_WRITE);
+//							}
+							// 27,15,40.5,6-1,12,6,3y,8-1,10106,20%
+				    		setNumPages(getNumPages() + 1);
+				    		setNotFullPagesList(pageNo, false);
+				    		heapPage = 
+									(HeapPage) Database.getBufferPool()
+									.getPage(tid, checkedPid, Permissions.READ_WRITE);
+						}
+					}
+				}
+			}	
+    	}
+		
+		if (getNumPages() == 0) {
+			synchronized (this) {
+				if (getNumPages() == 0) {
+					setNumPages(getNumPages() + 1);
+		    		setNotFullPagesList(0, false);
+				}
+				heapPage  = 
+						(HeapPage) Database.getBufferPool()
+						.getPage(tid, new HeapPageId(tableId, 0), Permissions.READ_WRITE);
+			}
+		}
+		
+		heapPage.insertTuple(t);
+		heapPage.markDirty(true, tid);
+		resPages.add(heapPage);
+		
+    	return resPages;
+    }
+    
+    /**
+    * Only used when SINGLE Thread
     * Inserts the specified tuple to the file on behalf of transaction.
     * This method will acquire a lock on the affected pages of the file, and
     * may block until the lock can be acquired.
@@ -74,29 +159,33 @@ public class HeapFile extends DbFile {
     * @throws DbException if the tuple cannot be added
     * @throws IOException if the needed file can't be read/written
     */
-    public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
+    public ArrayList<Page> insertTuple(TransactionId tid, Tuple t, boolean noConcurrent)
             throws DbException, TransactionAbortedException {
     	
     	ArrayList<Page> resPages = new ArrayList<Page>();
     	
     	int pageNo;
-    	synchronized (this) {
-    		for (pageNo = 0; pageNo < getNumPages(); pageNo++) {
-        		if (!isFullPage(pageNo)) {		
-        			break;
-        		}
-        	}
-    		if (pageNo == getNumPages()) {
-	    		setNumPages(getNumPages() + 1);
-	    		setNotFullPagesList(pageNo, false);
+    	// single thread version: can be faster, 
+    	// no need to get page when finding empty slots
+		for (pageNo = 0; pageNo < getNumPages(); pageNo++) {
+			// check not full, only locked on file level
+			// but this page can be inserted this time (require page level lock)
+    		if (!isFullPage(pageNo)) {		
+    			break;
     		}
-    		HeapPage heapPage  = 
-    				(HeapPage) Database.getBufferPool()
-    				.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
-    		heapPage.insertTuple(t);
-    		heapPage.markDirty(true, tid);
-    		resPages.add(heapPage);
+    	}
+		if (pageNo == getNumPages()) {
+    		setNumPages(getNumPages() + 1);
+    		setNotFullPagesList(pageNo, false);
 		}
+		HeapPage heapPage  = 
+				(HeapPage) Database.getBufferPool()
+				.getPage(tid, new HeapPageId(tableId, pageNo), Permissions.READ_WRITE);
+		// but here check full
+		heapPage.insertTuple(t);
+		heapPage.markDirty(true, tid);
+		resPages.add(heapPage);
+		
 		
     	return resPages;
     }
