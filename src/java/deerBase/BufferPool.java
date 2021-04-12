@@ -36,7 +36,7 @@ public class BufferPool {
     
     private int numPages;
     private int numUsedPages;
-    private LRUCache pageMap;
+    private LRUCache cache;
     private LRUCache fixedMap;
     
     //private Database.getLockManager() Database.getLockManager();
@@ -49,7 +49,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
     	this.numPages = numPages;
     	this.numUsedPages = 0;
-    	this.pageMap = new LRUCache(numPages);
+    	this.cache = new LRUCache(numPages);
     	this.fixedMap = new LRUCache(numPages);
     }
 
@@ -122,8 +122,8 @@ public class BufferPool {
     	Database.getLockManager().debug(tid, pid, "successfully getPage with try "+ counter);
     	
     	
-    	if (pageMap.containsKey(pid)) {
-    		return pageMap.get(pid);
+    	if (cache.containsKey(pid)) {
+    		return cache.get(pid);
     	}
     	
     	// pid is not in buffer pool
@@ -167,7 +167,7 @@ public class BufferPool {
     	//System.out.println("load page for " + tableName + " page #" + pid.pageNumber());
 
     	
-    	pageMap.put(pid, resPage);
+    	cache.put(pid, resPage);
     	numUsedPages++;
         return resPage;
     }
@@ -246,7 +246,7 @@ public class BufferPool {
     	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page resPage = dbFile.readPage(pid);
     	try {
-			pageMap.put(pid, resPage);
+			cache.put(pid, resPage);
 		} catch (DbException e) {
 			e.printStackTrace();
 		}
@@ -276,7 +276,7 @@ public class BufferPool {
     	for (Page page : ditryPages) {
     		page.markDirty(true, tid);
 			// update to the new version of dirty pages, put in BufferPool
-	    	pageMap.put(page.getId(), page);
+	    	cache.put(page.getId(), page);
 	    	numUsedPages++;
     	}
     }
@@ -304,7 +304,7 @@ public class BufferPool {
     	for (Page page : ditryPages) {
     		page.markDirty(true, tid);
 			// update to the new version of dirty pages, put in BufferPool
-	    	pageMap.put(page.getId(), page);
+	    	cache.put(page.getId(), page);
 	    	numUsedPages++;
     	}
     }
@@ -315,7 +315,7 @@ public class BufferPool {
      *     break deerBase if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-    	Iterator<PageId> pidItr = pageMap.keyIterator();
+    	Iterator<PageId> pidItr = cache.keyIterator();
     	while (pidItr.hasNext()) {
 			flushPage(pidItr.next());
 		}
@@ -327,7 +327,7 @@ public class BufferPool {
         cache.
     */
     public synchronized void discardPage(PageId pid) {
-    	pageMap.remove(pid);
+    	cache.remove(pid);
     	numUsedPages--;
     }
 
@@ -336,11 +336,16 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
+    	if (pid == null || !cache.containsKey(pid)) {
+    		String containsOrNot = pid == null ? "contains" : "does not contain";
+    		throw new IllegalArgumentException("cache" + containsOrNot + " (PageId:"+pid+")");
+    	}
+    	
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
-    	Page flushedPage = pageMap.get(pid);
+    	Page flushedPage = cache.get(pid);
+    	// flushedPage may be null when pid is not in pageMap (i.e. LRU cache)
     	tableFile.writePage(flushedPage);
     	flushedPage.markDirty(false, null);
-    	releasePage(pid);
     }
     
 
@@ -355,7 +360,9 @@ public class BufferPool {
     	pIds.stream()
 	    	.forEach(pId -> {
 				try {
-					flushPage(pId);
+					if (pId != null && cache.containsKey(pId)) {
+						flushPage(pId);
+					}
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
