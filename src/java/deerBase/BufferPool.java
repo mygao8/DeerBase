@@ -99,13 +99,13 @@ public class BufferPool {
 			try {
 				TimeUnit.MILLISECONDS.sleep(10);
 				
-				if (++counter > 2000) {
+				if (++counter > 500) {
 					break;
 				}
 				
 				acquired = Database.getLockManager().tryAcquireLock(tid, pid, perm);
 				if (!acquired) {
-					Database.getLockManager().debug(tid, pid, "try getPage "+ counter + "times");
+					//Database.getLockManager().debug(tid, pid, "try getPage "+ counter + "times");
 				}
 				
 			} catch (InterruptedException e) {
@@ -115,7 +115,7 @@ public class BufferPool {
 		}
 		//}
     	
-    	if (counter > 2000) {
+    	if (counter > 500) {
     		throw new TransactionAbortedException();
     	}
     	
@@ -194,7 +194,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for proj1
     	
-    	// why passing tid in
+    	// why passing tid in??
     	releasePage(pid);
     }
     
@@ -215,6 +215,7 @@ public class BufferPool {
     	  	
     	transactionComplete(tid, true);
     }
+    
     
     /**
      * Commit or abort a given transaction; release all locks associated to

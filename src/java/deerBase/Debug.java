@@ -15,12 +15,12 @@ import java.util.Arrays;
  */
 
 public class Debug {
-  private static final int DEBUG_LEVEL; // now: 1 for all (deerbase and test), 0 for deerbase
+  private static final int DEBUG_LEVEL; // now: 2 for all (deerbase and test), 1 for deerbase, 0 for nothing
   static {
       String debug = System.getProperty("deerBase.Debug");
       if (debug == null) {
           // No system property = disabled
-          DEBUG_LEVEL = 1; // should be null
+          DEBUG_LEVEL = 2; // null to close all
       } else if (debug == "") {
           // Empty property = level 0
           DEBUG_LEVEL = 0;
@@ -30,9 +30,10 @@ public class Debug {
   }
 
   private static final int DEFAULT_STACK_TRACE_DEPTH = 5;
-  private static final int DEFAULT_LEVEL = 0;
-  public static final int DEER_BASE = 0;
-  public static final int TEST = 1;
+  private static final int DEFAULT_LEVEL = 1; // <= debug, always print
+  public static final int DEER_BASE = 1;
+  public static final int TEST = 2;
+  public static final int CLOSE = 10;
 
   /** Log message if the log level >= level. Uses printf. */
   public static void log(int level, String message, Object... args) {

@@ -16,7 +16,8 @@ public class LockManager {
 	// store which transactions hold this shared lock
     private ConcurrentMap<PageId, List<Lock>> pageLockMap;
     
-    int debug = 0;
+    int debug = 1;
+    boolean foreverCloseDebug = false;
     
     public LockManager() {
     	txnLockMap = new ConcurrentHashMap<>();
@@ -42,6 +43,9 @@ public class LockManager {
     // used for flush pages belong to tid when txn commits
     public synchronized List<PageId> getPageIdsOnTransactionId (TransactionId tid) {    	
     	List<Lock> locksOnTxn = getLocksOnTransation(tid);
+    	if (locksOnTxn == null) 
+    		return new LinkedList<PageId>();
+    	
     	List<PageId> res = locksOnTxn.stream()
     			.map(Lock::getPageId)
     			.distinct()
@@ -359,17 +363,25 @@ public class LockManager {
     }
     
     public void debug(TransactionId tid, PageId pid, String s) {
-    	if (debug == 1 && tid.getId() != 0)
+    	if (debug == 1 && !foreverCloseDebug)
     		System.out.println("Tid:"+tid+" Pid:"+pid+" "+s);
     }
     
     public void debug(Lock lock, String s) {
-    	if (debug == 1 && lock.getTransactionId().getId() != 0)
+    	if (debug == 1 && !foreverCloseDebug)
     		System.out.println(lock + " " + s);
     }
     
     public void debug(String s) {
-    	if (debug == 1)
+    	if (debug == 1 && !foreverCloseDebug)
     		System.out.println(s);
+    }
+    
+    public void openDebug() {
+    	debug = 1;
+    }
+    
+    public void closeDebug() {
+    	debug = 0;
     }
 }

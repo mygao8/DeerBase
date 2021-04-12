@@ -8,6 +8,8 @@ import java.util.NoSuchElementException;
 
 // ref: 
 public class LRUCache {
+	private final static int LRUDebugLevel = Debug.CLOSE;
+	
     class ListNode {
     	PageId pId;
         Page page;
@@ -54,7 +56,7 @@ public class LRUCache {
      * @return
      */
     public Page get(PageId pId) {
-    	Debug.log("get page%d. in cache?%b 	%s", pId.pageNumber(), cache.containsKey(pId), Debug.stackTrace());
+    	Debug.log(LRUDebugLevel, "get page%d. in cache?%b 	%s", pId.pageNumber(), cache.containsKey(pId), Debug.stackTrace());
         ListNode node = cache.get(pId);
         if (node == null) {
             return null;
@@ -72,10 +74,10 @@ public class LRUCache {
      */
     public void put(PageId pId, Page page) throws DbException {
     	if (pId == null || page == null) {
-    		Debug.log("put null pid/page in cache %s", Debug.stackTrace());
+    		Debug.log(LRUDebugLevel, "put null pid/page in cache %s", Debug.stackTrace());
     		return;
     	}
-    	Debug.log("put page%d in cache 	%s", pId.pageNumber(), Debug.stackTrace());
+    	Debug.log(LRUDebugLevel, "put page%d in cache 	%s", pId.pageNumber(), Debug.stackTrace());
         ListNode node = cache.get(pId);
         if (node == null) {
             // if key does not exist, create new node
@@ -94,7 +96,7 @@ public class LRUCache {
 	                	moveToHead(tail);
 	                	tail = getTail();
 	                }
-	                Debug.log("full cache, evict %d: dirty=%d / cap=%d", 
+	                Debug.log(LRUDebugLevel, "full cache, evict %d: dirty=%d / cap=%d", 
 	                		tail.pId.pageNumber(), numDitryPages, capacity);
 	                // full of dirty pages, will be stuck here
 	                if (numDitryPages >= capacity) {
@@ -141,7 +143,7 @@ public class LRUCache {
             node.page = page;
             moveToHead(node);
         }
-        Debug.log("after put page%d now in cache: %s	%s",
+        Debug.log(LRUDebugLevel, "after put page%d now in cache: %s	%s",
         		pId.pageNumber(), cacheToString(), Debug.stackTrace());
     }
 
@@ -174,7 +176,7 @@ public class LRUCache {
     }
     
     public void printCache() {
-    	Debug.log(cacheToString());
+    	Debug.log(LRUDebugLevel, cacheToString());
     }
     
     private void addToHead(ListNode node) {

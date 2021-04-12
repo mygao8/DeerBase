@@ -18,6 +18,8 @@ public class HeapFile extends DbFile {
 
 	private static final long serialVersionUID = 1L;
 	
+	private static final int HeapFileDebugLevel = Debug.CLOSE;
+	
 	private TupleDesc td;
 	private int tableId;
 	
@@ -91,7 +93,7 @@ public class HeapFile extends DbFile {
 					(HeapPage) Database.getBufferPool()
 					.getPage(tid, checkedPid, Permissions.READ_ONLY);
 			
-			Debug.log("insert find page%d: isFull?%b", pageNo, heapPage.isFull());
+			Debug.log(HeapFileDebugLevel, "insert find page%d: isFull?%b", pageNo, heapPage.isFull());
 			if (!heapPage.isFull()) {
 				// find a not-full page, XLock for insert
 				heapPage = 
@@ -142,7 +144,7 @@ public class HeapFile extends DbFile {
 			}
 		}
 		
-		Debug.log("page%d insert", pageNo);
+		Debug.log(HeapFileDebugLevel, "page%d insert", pageNo);
 		heapPage.insertTuple(t);
 		heapPage.markDirty(true, tid);
 		resPages.add(heapPage);
