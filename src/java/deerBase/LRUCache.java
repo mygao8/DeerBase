@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
 
 // ref: 
 public class LRUCache {
@@ -29,11 +30,11 @@ public class LRUCache {
         }
     }
 
-    private Map<PageId, ListNode> cache = new HashMap<PageId, ListNode>();
-    private int size;
-    private int capacity;
+    private ConcurrentHashMap<PageId, ListNode> cache = new ConcurrentHashMap<>();
+    private volatile int size;
+    private final int capacity;
     private final ListNode dummyHead, dummyTail;
-    private int evictionPolicy = 1;
+    private final int evictionPolicy = 1;
     private static final int NOSTEAL = 1;
 
     public LRUCache(int capacity) {
@@ -55,7 +56,7 @@ public class LRUCache {
      * @param key
      * @return
      */
-    public Page get(PageId pId) {
+    public synchronized Page get(PageId pId) {
     	Debug.log(LRUDebugLevel, "get page%d. in cache?%b 	%s", pId.pageNumber(), cache.containsKey(pId), Debug.stackTrace());
         ListNode node = cache.get(pId);
         if (node == null) {
@@ -72,7 +73,7 @@ public class LRUCache {
      * @param value
      * @throws DbException 
      */
-    public void put(PageId pId, Page page) throws DbException {
+    public synchronized void put(PageId pId, Page page) throws DbException {
     	if (pId == null || page == null) {
     		Debug.log(LRUDebugLevel, "put null pid/page in cache %s", Debug.stackTrace());
     		return;
@@ -151,7 +152,7 @@ public class LRUCache {
      * 
      * @param pid
      */
-    public ListNode remove(PageId pid) {
+    public synchronized ListNode remove(PageId pid) {
     	ListNode removedNode = cache.remove(pid);
     	if (removedNode == null) {
     		return null;
@@ -179,24 +180,24 @@ public class LRUCache {
     	Debug.log(LRUDebugLevel, cacheToString());
     }
     
-    private void addToHead(ListNode node) {
+    private synchronized void addToHead(ListNode node) {
         node.prev = dummyHead;
         node.next = dummyHead.next;
         dummyHead.next.prev = node;
         dummyHead.next = node;
     }
 
-    private void removeNode(ListNode node) {
+    private synchronized void removeNode(ListNode node) {
         node.prev.next = node.next;
         node.next.prev = node.prev;
     }
 
-    private void moveToHead(ListNode node) {
+    private synchronized void moveToHead(ListNode node) {
         removeNode(node);
         addToHead(node);
     }
 
-    private ListNode removeTail() {
+    private synchronized ListNode removeTail() {
         ListNode res = dummyTail.prev;
         removeNode(res);
         return res;
