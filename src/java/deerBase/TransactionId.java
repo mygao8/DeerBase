@@ -28,4 +28,8 @@ public class TransactionId implements Serializable {
     public int hashCode() {
         return (int) myid;
     }
+    
+    public String toString() {
+    	return "Txn" + myid;
+    }
 }

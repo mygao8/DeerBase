@@ -1,5 +1,6 @@
 package deerBase;
 
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -37,7 +38,7 @@ public class Filter extends Operator {
     }
 
     public void open() throws DbException, NoSuchElementException,
-            TransactionAbortedException {
+            TransactionAbortedException, IOException {
         child.open();
         super.open();
     }
@@ -47,7 +48,7 @@ public class Filter extends Operator {
         super.close();
     }
 
-    public void rewind() throws DbException, TransactionAbortedException {
+    public void rewind() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         child.rewind();
     }
 
@@ -58,9 +59,10 @@ public class Filter extends Operator {
      * 
      * @return The next tuple that passes the filter, or null if there are no
      *         more tuples
+     * @throws IOException 
      */
     protected Tuple fetchNext() throws NoSuchElementException,
-            TransactionAbortedException, DbException {
+            TransactionAbortedException, DbException, IOException {
     	while (child.hasNext()) {
     		Tuple t = child.next();
     		if (predicate.filter(t)) {

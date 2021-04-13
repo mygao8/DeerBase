@@ -1,10 +1,12 @@
 package deerBase;
 
 import java.io.*;
+import java.time.chrono.MinguoChronology;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 import java.util.Timer;
 import java.util.concurrent.TimeUnit;
 
@@ -92,9 +94,11 @@ public class BufferPool {
     	// TODO: tid and perm
     	Database.getLockManager().debug(tid, pid, "try getPage 0 times");
     	//synchronized (pid) {
+    	Debug.log("begin to get page %s", Debug.stackTrace(0,15));
     	
 		boolean acquired = Database.getLockManager().tryAcquireLock(tid, pid, perm);
 		int counter = 1;
+
 		while (!acquired) {
 			try {
 				TimeUnit.MILLISECONDS.sleep(10);
@@ -105,7 +109,7 @@ public class BufferPool {
 				
 				acquired = Database.getLockManager().tryAcquireLock(tid, pid, perm);
 				if (!acquired) {
-					//Database.getLockManager().debug(tid, pid, "try getPage "+ counter + "times");
+					Database.getLockManager().debug(tid, pid, "try getPage "+ counter + "times");
 				}
 				
 			} catch (InterruptedException e) {
@@ -116,6 +120,7 @@ public class BufferPool {
 		//}
     	
     	if (counter > 500) {
+    		Database.getLockManager().debug(tid, pid, "failed to getPage with try "+ counter + "times");
     		throw new TransactionAbortedException();
     	}
     	
@@ -228,6 +233,8 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for proj1
+    	Database.getLockManager().debug(tid + (commit ? " commits" : "aborts"));
+    	
     	if (commit) {
     		// flush
     		flushPages(tid);

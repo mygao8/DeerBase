@@ -1,5 +1,8 @@
 package deerBase;
 
+import java.io.IOException;
+import java.util.NoSuchElementException;
+
 /**
  * The delete operator. Delete reads tuples from its child operator and removes
  * them from the table they belong to.
@@ -36,7 +39,7 @@ public class Delete extends Operator {
     	return td;
     }
 
-    public void open() throws DbException, TransactionAbortedException {
+    public void open() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
     	super.open();
     	child.open();
     }
@@ -46,7 +49,7 @@ public class Delete extends Operator {
     	child.close();
     }
 
-    public void rewind() throws DbException, TransactionAbortedException {
+    public void rewind() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         child.rewind();
     }
 
@@ -55,10 +58,12 @@ public class Delete extends Operator {
      * processed via the buffer pool.
      * 
      * @return A 1-field tuple containing the number of deleted records.
+     * @throws IOException 
+     * @throws NoSuchElementException 
      * @see Database#getBufferPool
      * @see BufferPool#deleteTuple
      */
-    protected Tuple fetchNext() throws TransactionAbortedException, DbException {
+    protected Tuple fetchNext() throws TransactionAbortedException, DbException, NoSuchElementException, IOException {
     	if (hasCalledFectchNxt) {
     		return null;
     	}    	
@@ -66,11 +71,9 @@ public class Delete extends Operator {
     	
     	int count = 0;
     	while (child.hasNext()) {
-    		try {
-        		Database.getBufferPool().deleteTuple(tid, child.next());
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+
+        	Database.getBufferPool().deleteTuple(tid, child.next());
+
     		count++;
     	}
     	

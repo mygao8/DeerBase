@@ -58,18 +58,32 @@ public class Debug {
     log(DEFAULT_LEVEL, message, args);
   }
   
+  public static String stackTrace(int from, int depth) {
+	  // from 2 to depth+2, to remove getStackTrace(Thread.java), stackTrace(Debug.java)
+	  StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
+	  return '\n' + Arrays.toString( 
+			  Arrays.copyOfRange(
+					  stackTraces, 
+					  from, Math.min(depth+from, stackTraces.length)
+					  ));
+  }
+  
   public static String stackTrace(int depth) {
 	  // from 2 to depth+2, to remove getStackTrace(Thread.java), stackTrace(Debug.java)
+	  StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
 	  return '\n' + Arrays.toString(
 			  Arrays.copyOfRange(
-					  Thread.currentThread().getStackTrace(), 2, depth+2
+					  stackTraces,
+					  2, Math.min(depth+2, stackTraces.length)
 					  ));
   }
   
   public static String stackTrace() {
+	  StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
 	  return '\n' + Arrays.toString(
 			  Arrays.copyOfRange(
-					  Thread.currentThread().getStackTrace(), 2, DEFAULT_STACK_TRACE_DEPTH+2
+					  stackTraces,
+					  2, Math.min(DEFAULT_STACK_TRACE_DEPTH+2, stackTraces.length)
 					  ));
   }
 }

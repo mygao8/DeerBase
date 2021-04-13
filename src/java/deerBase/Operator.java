@@ -1,5 +1,6 @@
 package deerBase;
 
+import java.io.IOException;
 import java.util.NoSuchElementException;
 
 /**
@@ -9,7 +10,7 @@ public abstract class Operator implements DbIterator {
 
     private static final long serialVersionUID = 1L;
 
-    public boolean hasNext() throws DbException, TransactionAbortedException {
+    public boolean hasNext() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         if (!this.open)
             throw new IllegalStateException("Operator not yet open");
         
@@ -19,7 +20,7 @@ public abstract class Operator implements DbIterator {
     }
 
     public Tuple next() throws DbException, TransactionAbortedException,
-            NoSuchElementException {
+            NoSuchElementException, IOException {
         if (next == null) {
             next = fetchNext();
             if (next == null)
@@ -38,9 +39,11 @@ public abstract class Operator implements DbIterator {
      * 
      * @return the next Tuple in the iterator, or null if the iteration is
      *         finished.
+     * @throws IOException 
+     * @throws NoSuchElementException 
      */
     protected abstract Tuple fetchNext() throws DbException,
-            TransactionAbortedException;
+            TransactionAbortedException, NoSuchElementException, IOException;
 
     /**
      * Closes this iterator. If overridden by a subclass, they should call
@@ -56,7 +59,7 @@ public abstract class Operator implements DbIterator {
     private boolean open = false;
     private int estimatedCardinality = 0;
 
-    public void open() throws DbException, TransactionAbortedException {
+    public void open() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         this.open = true;
     }
 

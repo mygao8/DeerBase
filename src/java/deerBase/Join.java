@@ -84,7 +84,7 @@ public class Join extends Operator {
         return TupleDesc.merge(td1, td2);
     }
 
-    public void open() throws DbException, TransactionAbortedException {
+    public void open() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         super.open();
         child1.open();
         child2.open();
@@ -104,7 +104,7 @@ public class Join extends Operator {
         tpIter = null;
     }
 
-    public void rewind() throws DbException, TransactionAbortedException {
+    public void rewind() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         child1.rewind();
         child2.rewind();
 //        try {
@@ -133,9 +133,11 @@ public class Join extends Operator {
      * joined on equality of the first column, then this returns {1,2,3,1,5,6}.
      * 
      * @return The next matching tuple.
+     * @throws IOException 
+     * @throws NoSuchElementException 
      * @see JoinPredicate#filter
      */
-    protected Tuple fetchNext() throws TransactionAbortedException, DbException {    	
+    protected Tuple fetchNext() throws TransactionAbortedException, DbException, NoSuchElementException, IOException {    	
         if (tpIter == null) {
 				//tpIter = new tupleItr();
         		tpIter = getAllFetchNext();
@@ -459,8 +461,10 @@ public class Join extends Operator {
      * @return an iterator on all joined result tuples
      * @throws TransactionAbortedException
      * @throws DbException
+     * @throws IOException 
+     * @throws NoSuchElementException 
      */
-    private Iterator<Tuple> getAllFetchNext() throws TransactionAbortedException, DbException {
+    private Iterator<Tuple> getAllFetchNext() throws TransactionAbortedException, DbException, NoSuchElementException, IOException {
         
     	
     	int tpSize1 = child1.getTupleDesc().numFields();

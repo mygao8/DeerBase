@@ -59,8 +59,10 @@ public class Query implements Serializable {
         return this.op.getTupleDesc();
     }
 
-    /** @return true if there are more tuples remaining. */
-    public boolean hasNext() throws DbException, TransactionAbortedException {
+    /** @return true if there are more tuples remaining. 
+     * @throws IOException 
+     * @throws NoSuchElementException */
+    public boolean hasNext() throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         return op.hasNext();
     }
 
@@ -75,9 +77,10 @@ public class Query implements Serializable {
      *             If the iterator has finished iterating
      * @throws TransactionAbortedException
      *             If the transaction is aborted (e.g., due to a deadlock)
+     * @throws IOException 
      */
     public Tuple next() throws DbException, NoSuchElementException,
-            TransactionAbortedException {
+            TransactionAbortedException, IOException {
         if (!started)
             throw new DbException("Database not started.");
 
