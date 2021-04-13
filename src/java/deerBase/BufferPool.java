@@ -28,6 +28,21 @@ public class BufferPool {
     constructor instead. */
     public static final int DEFAULT_PAGES = 5120;
     
+    /** NOTE: IF MAX_TIMEOUT == MIN_TIMEOU, timeout will be fixed 
+     * IF MAX_TIMEOUT > MIN_TIMEOUT, timeout will be uniformly distributed in [MIN_TIMEOUT, MAX_TIMEOUT]*/
+    
+    /** Max timeout for a deadlock to abort. Unit: 10ms
+     * i.e. MaxTimeOut = 100, max timeout time = 100*10ms = 1s */
+    public static final int MAX_TIMEOUT = 600;
+    
+    /** Min timeout for a deadlock to abort. Unit: 10ms
+     * i.e. MinTimeOut = 100, min timeout time = 100*10ms = 1s */
+    public static final int MIN_TIMEOUT = 400;
+    
+    /** If a transaction failed to acquire desired lock, 
+     * if will retry after RETRY_INTERVAL Unit: ms */
+    public static final int RETRY_INTERVAL = 10;
+    
     /** Default ratio of loading a full table into buffer pool, which equals
     to table.numPages() / BufferPool.numPages(). */
     public static final double DEFUALT_LOAD_TABLE_RATIO = (float) 0.3;
@@ -93,17 +108,18 @@ public class BufferPool {
         throws TransactionAbortedException, DbException {
     	// TODO: tid and perm
     	Database.getLockManager().debug(tid, pid, "try getPage 0 times");
-    	//synchronized (pid) {
-    	Debug.log("begin to get page %s", Debug.stackTrace(0,15));
+    	//Debug.log("begin to get page %s", Debug.stackTrace(0,15));
     	
 		boolean acquired = Database.getLockManager().tryAcquireLock(tid, pid, perm);
 		int counter = 1;
-
+		Random random = new Random();
+		int max = MAX_TIMEOUT / RETRY_INTERVAL, min = MIN_TIMEOUT / RETRY_INTERVAL;
+		int timeoutCounter = random.nextInt(max-min+1) + min;
 		while (!acquired) {
 			try {
-				TimeUnit.MILLISECONDS.sleep(10);
+				TimeUnit.MILLISECONDS.sleep(RETRY_INTERVAL);
 				
-				if (++counter > 500) {
+				if (++counter > timeoutCounter) {
 					break;
 				}
 				
@@ -117,9 +133,8 @@ public class BufferPool {
 				e.printStackTrace();
 			}
 		}
-		//}
     	
-    	if (counter > 500) {
+    	if (counter > timeoutCounter) {
     		Database.getLockManager().debug(tid, pid, "failed to getPage with try "+ counter + "times");
     		throw new TransactionAbortedException();
     	}

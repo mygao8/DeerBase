@@ -12,6 +12,7 @@ import java.util.Arrays;
 import org.junit.Test;
 
 import deerBase.*;
+import sun.jvm.hotspot.debugger.Debugger;
 
 import static org.junit.Assert.*;
 
@@ -59,6 +60,7 @@ public class TransactionTest extends DeerBaseTestBase {
             assert tester.completed;
         }
 
+        Debug.log(Debug.TEST, "======check result=====");
         // Check that the table has the correct value
         TransactionId tid = new TransactionId();
         DbFileIterator it = table.iterator(tid);
@@ -119,7 +121,6 @@ public class TransactionTest extends DeerBaseTestBase {
                         q2.start();
                         q2.next();
                         q2.close();
-
                         // set up a Set with a tuple that is one higher than the old one.
                         HashSet<Tuple> hs = new HashSet<Tuple>();
                         hs.add(t);
@@ -134,9 +135,11 @@ public class TransactionTest extends DeerBaseTestBase {
 
                         tr.commit();
                         break;
-                    } catch (TransactionAbortedException te) {
+                    }
+                    catch (TransactionAbortedException te) {
                         //System.out.println("thread " + tr.getId() + " killed");
                         // give someone else a chance: abort the transaction
+                    	 Debug.log(Debug.TEST, "catch txnAbortException");
                         tr.transactionComplete(true);
                         latch.stillParticipating();
                     }
@@ -144,6 +147,7 @@ public class TransactionTest extends DeerBaseTestBase {
                 //System.out.println("thread " + id + " done");
             } catch (Exception e) {
                 // Store exception for the master thread to handle
+            	e.printStackTrace();
                 exception = e;
             }
             
@@ -213,7 +217,9 @@ public class TransactionTest extends DeerBaseTestBase {
 
     @Test public void testTwoThreads()
             throws IOException, DbException, TransactionAbortedException {
+    	//Database.getLockManager().openDebug();
         validateTransactions(2);
+       // Database.getLockManager().closeDebug();
     }
 
     @Test public void testFiveThreads()
