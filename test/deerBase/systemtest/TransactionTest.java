@@ -12,7 +12,6 @@ import java.util.Arrays;
 import org.junit.Test;
 
 import deerBase.*;
-import sun.jvm.hotspot.debugger.Debugger;
 
 import static org.junit.Assert.*;
 

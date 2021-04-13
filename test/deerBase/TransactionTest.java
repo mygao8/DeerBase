@@ -44,6 +44,7 @@ public class TransactionTest extends TestUtil.CreateHeapFile {
     bp.getPage(tid, p1, Permissions.READ_WRITE).markDirty(true, tid);
     bp.getPage(tid, p2, Permissions.READ_WRITE).markDirty(true, tid);
     bp.flushAllPages();
+    Database.getLockManager().releaseLocksOnTxn(tid);
     bp = Database.resetBufferPool(BufferPool.DEFAULT_PAGES);
   }
 

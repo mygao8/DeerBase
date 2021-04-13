@@ -286,8 +286,7 @@ public class LockManager {
     
     // release all locks belong to tid
     public synchronized boolean releaseLocksOnTxn(TransactionId tid) {
-    	System.out.println("!!!!!!!!!!"+ tid + "release all locks==========");
-    	debug("!!!!!!!!!!!try to release all locks of txn " + tid);
+    	debug("try to release all locks of txn " + tid);
     	List<Lock> locksOnTxn = txnLockMap.get(tid);
     	if (locksOnTxn == null) {
     		debug("all locks of txn " + tid + " already released");

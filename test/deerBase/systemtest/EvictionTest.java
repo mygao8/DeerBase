@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.NoSuchElementException;
 
 import org.junit.Test;
 
@@ -26,7 +27,7 @@ public class EvictionTest extends DeerBaseTestBase {
         System.out.println("EvictionTest scanning large table");
         Database.resetBufferPool(BUFFER_PAGES);
         long beginMem = SystemTestUtil.getMemoryFootprint();
-        SeqScan scan = new SeqScan(null, f.getId(), "");
+        SeqScan scan = new SeqScan(new TransactionId(), f.getId(), "");
         scan.open();
         while (scan.hasNext()) {
             scan.next();
@@ -40,7 +41,7 @@ public class EvictionTest extends DeerBaseTestBase {
     }
 
     public static void insertRow(HeapFile f, Transaction t) throws DbException,
-            TransactionAbortedException {
+            TransactionAbortedException, NoSuchElementException, IOException {
         // Create a row to insert
         TupleDesc twoIntColumns = Utility.getTupleDesc(2);
         Tuple value = new Tuple(twoIntColumns);

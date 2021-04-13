@@ -125,9 +125,11 @@ public class TestUtil {
      * Check to see if the DbIterators have the same number of tuples and
      *   each tuple pair in parallel iteration satisfies compareTuples .
      * If not, throw an assertion.
+     * @throws IOException 
+     * @throws NoSuchElementException 
      */
     public static void compareDbIterators(DbIterator expected, DbIterator actual)
-            throws DbException, TransactionAbortedException {
+            throws DbException, TransactionAbortedException, NoSuchElementException, IOException {
         while (expected.hasNext()) {
             assertTrue(actual.hasNext());
 
@@ -144,9 +146,11 @@ public class TestUtil {
      * Check to see if every tuple in expected matches <b>some</b> tuple
      *   in actual via compareTuples. Note that actual may be a superset.
      * If not, throw an assertion.
+     * @throws IOException 
+     * @throws NoSuchElementException 
      */
     public static void matchAllTuples(DbIterator expected, DbIterator actual) throws
-            DbException, TransactionAbortedException {
+            DbException, TransactionAbortedException, NoSuchElementException, IOException {
         // TODO(ghuo): this n^2 set comparison is kind of dumb, but we haven't
         // implemented hashCode or equals for tuples.
         boolean matched = false;
@@ -171,9 +175,11 @@ public class TestUtil {
 
     /**
      * Verifies that the DbIterator has been exhausted of all elements.
+     * @throws IOException 
+     * @throws NoSuchElementException 
      */
     public static boolean checkExhausted(DbIterator it)
-        throws TransactionAbortedException, DbException {
+        throws TransactionAbortedException, DbException, NoSuchElementException, IOException {
 
         if (it.hasNext()) return false;
 
@@ -363,11 +369,12 @@ public class TestUtil {
                     error = e;
                 }
             } finally {
-                try {
-                    Database.getBufferPool().transactionComplete(tid, false);
-                } catch (java.io.IOException e2) {
-                    e2.printStackTrace();
-                }
+            	// should not complete txn when DeadlockTest
+//                try {
+//                    Database.getBufferPool().transactionComplete(tid, false);
+//                } catch (java.io.IOException e2) {
+//                    e2.printStackTrace();
+//                }
             }
         }
 
