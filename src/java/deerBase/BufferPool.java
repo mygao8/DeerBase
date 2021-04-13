@@ -372,9 +372,38 @@ public class BufferPool {
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page flushedPage = cache.remove(pid).page;
     	
+    	/**
+    	 * Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
+    	 * UW CSE444 Lab5 1.Started
+         * Add UW's supplement codes for log and recovery
+         */
+    	// append an update record to the log, with
+    	// a before-image and after-image.
+    	TransactionId dirtier = flushedPage.getDirtier();
+    	if (dirtier != null){
+	    	Database.getLogFile().logWrite(dirtier, p.getBeforeImage(), p);
+	    	Database.getLogFile().force();
+    	}
+    	/**
+         * UW's supplement codes for log and recovery end
+         */
+    	
+    	
     	// flushedPage may be null when pid is not in pageMap (i.e. LRU cache)
     	tableFile.writePage(flushedPage);
     	flushedPage.markDirty(false, null);
+    	
+    	/**
+     	* Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
+   	  	* UW CSE444 Lab5 1.Started
+        * Add UW's supplement codes for log and recovery
+        */
+    	// use current page contents as the before-image
+        // for the next transaction that modifies this page.
+        flushedPage.setBeforeImage();
+	   	 /**
+        * UW's supplement codes for log and recovery end
+        */
     }
     
     /**
