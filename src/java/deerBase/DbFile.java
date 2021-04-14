@@ -84,13 +84,14 @@ public abstract class DbFile implements Serializable {
     	}
     	
     	try {
-    		RandomAccessFile adFile = new RandomAccessFile(f, "rw");
+    		RandomAccessFile raf = new RandomAccessFile(f, "rw");
     		byte[] buf = p.getPageData();
     		int pos = p.getId().pageNumber() * BufferPool.getPageSize();
     		
-    		adFile.seek(pos);
-    		adFile.write(buf);
-    		adFile.close();
+    		raf.seek(pos);
+    		raf.write(buf);
+    		force(raf);
+    		raf.close();
     	} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -176,6 +177,10 @@ public abstract class DbFile implements Serializable {
 	public TupleDesc getTupleDesc() {
 		return td;
 	}
+	
+    public void force(RandomAccessFile raf) throws IOException {
+        raf.getChannel().force(true);
+    }
 	
     
 //    /**

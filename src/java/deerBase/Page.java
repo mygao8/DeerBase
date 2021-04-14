@@ -37,4 +37,10 @@ public interface Page {
 
 
     public void setBeforeImage();
+
+//	/**
+//	 * Return a String in the format {el}\n{el}\n...{el}\n
+//	 * containing the first {numElements} elements in this page
+//	 */
+//	public String toString(int numElements);
 }

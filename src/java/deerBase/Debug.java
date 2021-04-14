@@ -29,7 +29,7 @@ public class Debug {
       }
   }
 
-  private static final int DEFAULT_STACK_TRACE_DEPTH = 5;
+  private static final int DEFAULT_STACK_TRACE_DEPTH = 10;
   private static final int DEFAULT_LEVEL = 1; // <= debug, always print
   public static final int DEER_BASE = 1;
   public static final int TEST = 2;
@@ -60,30 +60,33 @@ public class Debug {
   
   public static String stackTrace(int from, int depth) {
 	  // from 2 to depth+2, to remove getStackTrace(Thread.java), stackTrace(Debug.java)
+	  // Math.min()-1 to remove jdk.internal.reflect.NativeMethodAccessorImpl.invoke0
 	  StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
 	  return '\n' + Arrays.toString( 
 			  Arrays.copyOfRange(
 					  stackTraces, 
-					  from, Math.min(depth+from, stackTraces.length)
+					  from, Math.min(depth+from, stackTraces.length)-1
 					  ));
   }
   
   public static String stackTrace(int depth) {
 	  // from 2 to depth+2, to remove getStackTrace(Thread.java), stackTrace(Debug.java)
+	  // Math.min()-1 to remove jdk.internal.reflect.NativeMethodAccessorImpl.invoke0
 	  StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
 	  return '\n' + Arrays.toString(
 			  Arrays.copyOfRange(
 					  stackTraces,
-					  2, Math.min(depth+2, stackTraces.length)
+					  2, Math.min(depth+2, stackTraces.length)-1
 					  ));
   }
   
   public static String stackTrace() {
+	  // Math.min()-1 to remove jdk.internal.reflect.NativeMethodAccessorImpl.invoke0
 	  StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
 	  return '\n' + Arrays.toString(
 			  Arrays.copyOfRange(
 					  stackTraces,
-					  2, Math.min(DEFAULT_STACK_TRACE_DEPTH+2, stackTraces.length)
+					  2, Math.min(DEFAULT_STACK_TRACE_DEPTH+2, stackTraces.length)-1
 					  ));
   }
 }

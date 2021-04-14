@@ -106,6 +106,7 @@ public class Tuple implements Serializable {
     	
     	return rowStr.toString();
     }
+        
     
     /**
      * @return

@@ -252,34 +252,74 @@ public class BufferPool {
     	
     	if (commit) {
     		// flush
-    		flushPages(tid);
+    		List<PageId> pids = Database.getLockManager().getPageIdsOnTransactionId(tid);
+        	
+        	pids.stream()
+    	    	.forEach(pid -> {
+    				try {
+    					if (pid == null) return;
+    					
+    					// must store dirtier, flush will mark the page as not dirty
+    					Page page = getPageWithoutLock(pid, false);
+    					TransactionId dirtier = page.getDirtier();
+    					
+    					flushPage(pid);
+    					
+    					
+    					// check dirtier to set before image		
+						if (dirtier != null && dirtier.equals(tid)) {
+							Debug.log("in txnComplete, dirtier=%d, tid=%d", dirtier.getId(), tid.getId());
+					    	/**
+					     	* Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
+					   	  	* UW CSE444 Lab5 1.Started
+					        * Add UW's supplement codes for log and recovery
+					        */
+					    	// use current page contents as the before-image
+					        // for the next transaction that modifies this page.
+					        page.setBeforeImage();
+						   	 /**
+					        * UW's supplement codes for log and recovery end
+					        */
+					        
+							Debug.log("set before image %d for page%s, dirtier: txn%d", 
+									((HeapPage)page).oldData.hashCode(), pid, tid.getId());
+						}
+    				} catch (IOException e) {
+    					e.printStackTrace();
+    				}
+    			});
+        	
     	} else {
     		// re-read
-        	List<PageId> pIds = Database.getLockManager().getPageIdsOnTransactionId(tid);
+        	List<PageId> pids = Database.getLockManager().getPageIdsOnTransactionId(tid);
         	
-        	pIds.stream()
-        		.forEach(pId -> {
-        			discardPage(pId);
-        			getPageWithoutLock(pId);
+        	pids.stream()
+        		.forEach(pid -> {
+        			discardPage(pid);
+        			getPageWithoutLock(pid, true);
         		});   
     	}
     	// release all locks on tid
     	Database.getLockManager().releaseLocksOnTxn(tid);
     }
     
-    private Page getPageWithoutLock(PageId pid) {
+    private Page getPageWithoutLock(PageId pid, boolean putInCache) {
     	if (cache.containsKey(pid)) {
     		return cache.get(pid);
     	}
     	
     	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page resPage = dbFile.readPage(pid);
-    	try {
-			cache.put(pid, resPage);
-		} catch (DbException e) {
-			e.printStackTrace();
-		}
-    	numUsedPages++;
+    	
+    	if (putInCache) {
+        	try {
+    			cache.put(pid, resPage);
+    		} catch (DbException e) {
+    			e.printStackTrace();
+    		}
+        	numUsedPages++;
+    	}
+    	
         return resPage;
     }
     
@@ -366,11 +406,14 @@ public class BufferPool {
     private synchronized void flushPage(PageId pid) throws IOException {
     	if (pid == null || !cache.containsKey(pid)) {
     		String containsOrNot = pid == null ? "contains" : "does not contain";
-    		throw new IllegalArgumentException("cache" + containsOrNot + " (PageId:"+pid+")");
+    		Debug.log("cache" + containsOrNot + " (PageId:"+pid+")");
+    		return;
     	}
     	
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
-    	Page flushedPage = cache.remove(pid).page;
+    	Page flushedPage = cache.get(pid);
+    	
+    	Debug.log("flush Page in BufferPool %s %s\n", pid.toString(), Debug.stackTrace());
     	
     	/**
     	 * Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
@@ -380,8 +423,8 @@ public class BufferPool {
     	// append an update record to the log, with
     	// a before-image and after-image.
     	TransactionId dirtier = flushedPage.getDirtier();
-    	if (dirtier != null){
-	    	Database.getLogFile().logWrite(dirtier, p.getBeforeImage(), p);
+    	if (dirtier != null){ // what if ditier is not tid ???
+	    	Database.getLogFile().logWrite(dirtier, flushedPage.getBeforeImage(), flushedPage);
 	    	Database.getLogFile().force();
     	}
     	/**
@@ -391,19 +434,7 @@ public class BufferPool {
     	
     	// flushedPage may be null when pid is not in pageMap (i.e. LRU cache)
     	tableFile.writePage(flushedPage);
-    	flushedPage.markDirty(false, null);
-    	
-    	/**
-     	* Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
-   	  	* UW CSE444 Lab5 1.Started
-        * Add UW's supplement codes for log and recovery
-        */
-    	// use current page contents as the before-image
-        // for the next transaction that modifies this page.
-        flushedPage.setBeforeImage();
-	   	 /**
-        * UW's supplement codes for log and recovery end
-        */
+    	flushedPage.markDirty(false, flushedPage.getDirtier());
     }
     
     /**

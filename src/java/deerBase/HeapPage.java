@@ -22,7 +22,7 @@ public class HeapPage implements Page {
 
     boolean isDirty;
     TransactionId dirtier;
-    byte[] oldData;	// data of the page before a modify transaction, used for recovery
+    public byte[] oldData;	// data of the page before a modify transaction, used for recovery
 
     /**
      * Create a HeapPage from a set of bytes of data read from disk.
@@ -64,7 +64,8 @@ public class HeapPage implements Page {
         dis.close();
 
         this.isDirty = false;        
-        setBeforeImage();
+        //setBeforeImage();
+        this.oldData = data.clone();
     }
     
     public HeapPage (HeapPageId pid) {
@@ -371,6 +372,56 @@ public class HeapPage implements Page {
     	} else {
     		header[slotIdx] &= ~mask;
     	}
+    }
+    
+    // return a string with first {numTuples} tuples in this page
+    // without header and padding
+    public String toString(int numTuples) {
+    	StringBuilder sb = new StringBuilder();
+    	
+    	int len = BufferPool.getPageSize();
+    	
+    	Tuple emptyTuple = new Tuple(td);
+    	
+        // create the tuples
+        for (int i=0; i < Math.min(tuples.length, numTuples); i++) {
+
+            // empty slot
+            if (!isSlotUsed(i)) {
+                sb.append(emptyTuple.toString());
+                continue;
+            }
+            
+            // non-empty slot
+            sb.append(tuples[i]);
+        }
+
+        return sb.toString();
+    }
+    
+    // return a string with tuples in this page to represent the page content
+    // without header and padding
+    public String toString() {
+    	StringBuilder sb = new StringBuilder();
+    	
+    	int len = BufferPool.getPageSize();
+    	
+    	Tuple emptyTuple = new Tuple(td);
+    	
+        // create the tuples
+        for (int i=0; i < tuples.length; i++) {
+
+            // empty slot
+            if (!isSlotUsed(i)) {
+                sb.append(emptyTuple.toString());
+                continue;
+            }
+            
+            // non-empty slot
+            sb.append(tuples[i]);
+        }
+
+        return sb.toString();
     }
 
     /**

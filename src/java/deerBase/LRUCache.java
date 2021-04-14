@@ -34,8 +34,9 @@ public class LRUCache {
     private volatile int size;
     private final int capacity;
     private final ListNode dummyHead, dummyTail;
-    private final int evictionPolicy = 1;
-    private static final int NOSTEAL = 1;
+    private final int evictionPolicy = LRUCache.STEAL;
+    private static final int NOSTEAL = 0;
+    private static final int STEAL = 1;
 
     public LRUCache(int capacity) {
         this.size = 0;
@@ -103,6 +104,16 @@ public class LRUCache {
 	                if (numDitryPages >= capacity) {
 	                	throw new DbException("all pages in buffer are dirty");
 	                }
+                } 
+                else { // STEAL Policy
+                	// can flush page to disk before txn commit
+                	if (tail.page.isDirty()) {
+                		try {
+							flushPage(tail.page.getId());
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+                	}
                 }
                 
                 // delete the last accessed node from cache
@@ -212,12 +223,36 @@ public class LRUCache {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
+    	if (pid == null || !cache.containsKey(pid)) {
+    		String containsOrNot = pid == null ? "contains" : "does not contain";
+    		throw new IllegalArgumentException("cache" + containsOrNot + " (PageId:"+pid+")");
+    	}
+    	
+    	Debug.log("flush Page in LRU %s %s\n", pid.toString(), Debug.stackTrace());
+    	
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
-    	String tableName = Database.getCatalog().getTableName(tableFile.getTableId());
-    	//System.out.println("flush page for " + tableName + " page #" + pid.pageNumber());
     	Page flushedPage = cache.get(pid).page;
+    	
+    	/**
+    	 * Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
+    	 * UW CSE444 Lab5 1.Started
+         * Add UW's supplement codes for log and recovery
+         */
+    	// append an update record to the log, with
+    	// a before-image and after-image.
+    	TransactionId dirtier = flushedPage.getDirtier();
+    	if (dirtier != null){ // what if ditier is not tid ???
+	    	Database.getLogFile().logWrite(dirtier, flushedPage.getBeforeImage(), flushedPage);
+	    	Database.getLogFile().force();
+    	}
+    	/**
+         * UW's supplement codes for log and recovery end
+         */
+    	
+    	
+    	// flushedPage may be null when pid is not in pageMap (i.e. LRU cache)
     	tableFile.writePage(flushedPage);
-    	flushedPage.markDirty(false, null);
+    	flushedPage.markDirty(false, flushedPage.getDirtier());
     }
     
     public Iterator<PageId> keyIterator() {

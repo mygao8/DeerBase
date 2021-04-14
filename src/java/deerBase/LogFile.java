@@ -3,6 +3,9 @@ package deerBase;
 
 import java.io.*;
 import java.util.*;
+
+import javax.imageio.IIOException;
+
 import java.lang.reflect.*;
 
 /**
@@ -86,7 +89,17 @@ public class LogFile {
 
     static int INT_SIZE = 4;
     static int LONG_SIZE = 8;
-
+    
+    // beginning of each record: typeInt, tidLong
+    static int RECORD_BEGIN_SIZE = INT_SIZE + LONG_SIZE;
+    // end of each record: startOffsetLong
+    static int RECORD_END_SIZE = LONG_SIZE;
+    
+    // size of records with fixed length type
+    static int BEGIN_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
+    static int COMMIT_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
+    static int ABORT_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
+    
     long currentOffset = -1;
     int pageSize;
     int totalRecords = 0; // for PatchTest
@@ -187,14 +200,14 @@ public class LogFile {
     }
 
     /** Write an UPDATE record to disk for the specified tid and page
-        (with provided         before and after images.)
+        (with provided before and after images.)
         @param tid The transaction performing the write
         @param before The before image of the page
         @param after The after image of the page
 
         @see deerbase.Page#getBeforeImage
     */
-    public  synchronized void logWrite(TransactionId tid, Page before,
+    public synchronized void logWrite(TransactionId tid, Page before,
                                        Page after)
         throws IOException  {
         Debug.log("WRITE, offset = " + raf.getFilePointer());
@@ -214,7 +227,17 @@ public class LogFile {
         writePageData(raf,after);
         raf.writeLong(currentOffset);
         currentOffset = raf.getFilePointer();
-
+        
+        
+        Debug.log("UPDATE: txn%d, before:%d [%s] dirtied by txn%d, after:%d \n", 
+        		tid.getId(), before.hashCode(), ((HeapPage)after).oldData.toString(), tid.getId() , after.hashCode());
+        
+        if (tid.getId() == 1) {
+        	Debug.log("BeforeImage:\n %s \n", ((HeapPage)after).toString(20));
+        	Debug.log("AfterImage:\n %s \n", ((HeapPage)after).toString(20));
+        }
+        
+        
         Debug.log("WRITE OFFSET = " + currentOffset);
     }
 
@@ -467,10 +490,146 @@ public class LogFile {
             synchronized(this) {
                 preAppend();
                 // some code goes here
+                
+                // Log Record:
+                // typeInt, tidLong
+                // 
+                // UPDATE: before image, after image
+                // image: pageUTF, pidUTF (utfLenShort, [byte, byte, ..])
+                // pageInfoLenInt, [int, int, ..]
+                // pageDataLenInt, [byte, byte, ..]
+                // 
+                // CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+                // 
+                // startOffsetLong
+                
+                // start from the begin record of tid
+                long beginOffset = tidToFirstLogRecord.get(tid.getId());              
+                // skip begin record
+                raf.seek(beginOffset + BEGIN_SIZE);    
+			
+                int numUpdate = 0;
+                while (true) {
+                	int type;
+                	long tidLong;
+                	try {
+                    	 type = raf.readInt();
+                    	 tidLong = raf.readLong();
+                    	 Debug.log("Rollback: read log [type:%d, tid%d]\n", type, tidLong);
+                	}
+                    catch (EOFException e) {                
+                    	Debug.log("Reach EOF when roll back txn%d\n", tid.getId());
+                    	break;
+    				}
+                	
+	                if (tidLong == tid.getId() && type == UPDATE_RECORD) {
+	                	// undo for Update record
+	                	numUpdate++;
+	                	
+						Page beforeImage = readPageData(raf);
+						int tableId = beforeImage.getId().getTableId();
+						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+						if (numUpdate == 1) {
+						Debug.log("Rollback: undo update with page%s, %s\n", 
+								beforeImage.getId().toString(), beforeImage.toString());
+						dbFile.writePage(beforeImage);
+						}
+						// skip after image
+						readPageData(raf);
+						
+						int bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+	                }
+	                else {
+	                	// skip according to record type
+	                	int bytesSkipped;
+	                	switch (type) {
+						case BEGIN_RECORD:
+							bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+							if (bytesSkipped != RECORD_END_SIZE) {
+								throw new IIOException("EOF: " + raf.getFilePointer());
+							}
+							break;
+						case COMMIT_RECORD:
+							bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+							if (bytesSkipped != RECORD_END_SIZE) {
+								throw new IIOException("EOF: " + raf.getFilePointer());
+							}
+							break;
+						case ABORT_RECORD:
+							bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+							if (bytesSkipped != RECORD_END_SIZE) {
+								throw new IIOException("EOF: " + raf.getFilePointer());
+							}
+							break;
+						case UPDATE_RECORD:
+							// skip before image
+							readPageData(raf);
+							// skip after image
+							readPageData(raf);
+							
+							bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+							if (bytesSkipped != RECORD_END_SIZE) {
+								throw new IIOException("EOF: " + raf.getFilePointer());
+							}
+							break;
+						case CHECKPOINT_RECORD:
+							// CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+							
+							int numTxns = raf.readInt();
+							// outstanding txns (tidLong, 1stOffsetLong)
+							int toSkip = (LONG_SIZE * 2) * numTxns;
+							bytesSkipped = raf.skipBytes(toSkip);
+							if (bytesSkipped != toSkip) {
+								throw new IIOException("EOF: " + raf.getFilePointer());
+							}
+							
+							bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+							if (bytesSkipped != RECORD_END_SIZE) {
+								throw new IIOException("EOF: " + raf.getFilePointer());
+							}
+							break;
+						}
+	                }
+                }
+                
+                
+                
             }
         }
     }
-
+    
+    // return the size of image in Update record
+    private long skipImage(RandomAccessFile raf) throws IOException {
+    	// UPDATE: before image, after image
+        // image: pageUTF, pidUTF (utfLenShort, [byte, byte, ..])
+        // pageInfoLenInt, [int, int, ..]
+        // pageDataLenInt, [byte, byte, ..]
+    	
+    	long startOffset = raf.getFilePointer();
+    	
+    	// read UTF
+    	short pageUTFLen = raf.readShort();
+    	raf.skipBytes(pageUTFLen);
+    	short pidUTFLen = raf.readShort();
+    	raf.skipBytes(pidUTFLen);
+    	
+    	// read pageInfo[], i.e. page constructor args[]
+    	int pageInfoLen = raf.readInt();
+    	raf.skipBytes(pageInfoLen * INT_SIZE);
+    	
+    	// read pageData[], i.e. the whole page content in bytes[]
+    	int pageDataLen = raf.readInt();
+    	raf.skipBytes(pageDataLen);
+    	
+    	long endOffset = raf.getFilePointer();
+    	
+    	return endOffset - startOffset;
+    }
+    
     /** Shutdown the logging system, writing out whatever state
         is necessary so that start up can happen quickly (without
         extensive recovery.)
@@ -498,9 +657,10 @@ public class LogFile {
          }
     }
 
-    /** Print out a human readable represenation of the log */
+    /** Print out a human readable representation of the log */
     public void print() throws IOException {
         // some code goes here
+    	
     }
 
     public  synchronized void force() throws IOException {
