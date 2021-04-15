@@ -177,6 +177,9 @@ public class LogFile {
                 currentOffset = raf.getFilePointer();
                 force();
                 tidToFirstLogRecord.remove(tid.getId());
+                
+                // print log
+                print(5);
             }
         }
     }
@@ -197,6 +200,9 @@ public class LogFile {
         currentOffset = raf.getFilePointer();
         force();
         tidToFirstLogRecord.remove(tid.getId());
+        
+        // print log
+        print(5);
     }
 
     /** Write an UPDATE record to disk for the specified tid and page
@@ -232,10 +238,10 @@ public class LogFile {
         Debug.log("UPDATE: txn%d, before:%d [%s] dirtied by txn%d, after:%d \n", 
         		tid.getId(), before.hashCode(), ((HeapPage)after).oldData.toString(), tid.getId() , after.hashCode());
         
-        if (tid.getId() == 1) {
-        	Debug.log("BeforeImage:\n %s \n", ((HeapPage)after).toString(20));
-        	Debug.log("AfterImage:\n %s \n", ((HeapPage)after).toString(20));
-        }
+//        if (tid.getId() == 1) {
+//        	Debug.log("BeforeImage:\n %s \n", ((HeapPage)before).toString(20));
+//        	Debug.log("AfterImage:\n %s \n", ((HeapPage)after).toString(20));
+//        }
         
         
         Debug.log("WRITE OFFSET = " + currentOffset);
@@ -333,6 +339,7 @@ public class LogFile {
         raf.writeInt(BEGIN_RECORD);
         raf.writeLong(tid.getId());
         raf.writeLong(currentOffset);
+        Debug.log("put in map: txn%d, offset:%d", tid.getId(), currentOffset);
         tidToFirstLogRecord.put(tid.getId(), currentOffset);
         currentOffset = raf.getFilePointer();
 
@@ -450,6 +457,7 @@ public class LogFile {
                     }
                     break;
                 case BEGIN_RECORD:
+                	Debug.log("Rewrite: put in map txn%d, offset%d", record_tid, newStart);
                     tidToFirstLogRecord.put(record_tid,newStart);
                     break;
                 }
@@ -506,42 +514,58 @@ public class LogFile {
                 // start from the begin record of tid
                 long beginOffset = tidToFirstLogRecord.get(tid.getId());              
                 // skip begin record
-                raf.seek(beginOffset + BEGIN_SIZE);    
-			
+                raf.seek(beginOffset);    
+                
+                Debug.log("Roolback: set file ptr for txn%d, offset:%d, ptr:%d\n", 
+                		tid.getId(), beginOffset, raf.getFilePointer());
+                long tmptid = 0;
+                Debug.log("Roolback: other txns offset. txn0:%d, txn1:%d, txn2:%d, txn3::%d",
+                		tidToFirstLogRecord.get(tmptid), tidToFirstLogRecord.get(tmptid+1), 
+                		tidToFirstLogRecord.get(tmptid+2), tidToFirstLogRecord.get(tmptid+3));
+                
+                
                 int numUpdate = 0;
                 while (true) {
                 	int type;
                 	long tidLong;
+                	long offset;
                 	try {
+                		 offset = raf.getFilePointer();
                     	 type = raf.readInt();
                     	 tidLong = raf.readLong();
-                    	 Debug.log("Rollback: read log [type:%d, tid%d]\n", type, tidLong);
+                    	 Debug.log("Rollback: read log [offset%d type:%d, tid%d]\n", 
+                    			 offset, type, tidLong);
                 	}
                     catch (EOFException e) {                
                     	Debug.log("Reach EOF when roll back txn%d\n", tid.getId());
                     	break;
     				}
-                	
+                	if (offset > raf.length()) break;
 	                if (tidLong == tid.getId() && type == UPDATE_RECORD) {
 	                	// undo for Update record
 	                	numUpdate++;
 	                	
 						Page beforeImage = readPageData(raf);
+						// skip after image
+						Page afterImage = readPageData(raf);
+						long tmpOffset = raf.readLong();
+						
 						int tableId = beforeImage.getId().getTableId();
 						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
 						if (numUpdate == 1) {
-						Debug.log("Rollback: undo update with page%s, %s\n", 
-								beforeImage.getId().toString(), beforeImage.toString());
-						dbFile.writePage(beforeImage);
+							Debug.log("Rollback: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+									beforeImage.getId().toString(), tmpOffset, tidLong);
+							dbFile.writePage(beforeImage);
 						}
-						// skip after image
-						readPageData(raf);
+
+						Debug.log("Rollback: \n");
+						Debug.log("Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
+						Debug.log("After image:\n%s\n", ((HeapPage) afterImage).toString(5));
 						
-						int bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
-						if (bytesSkipped != RECORD_END_SIZE) {
-							throw new IIOException("EOF: " + raf.getFilePointer());
-						}
-						break;
+						// restore raf pointer??
+						Database.getBufferPool().discardPage(beforeImage.getId());
+						tidToFirstLogRecord.remove(tid.getId());
+						break;	
 	                }
 	                else {
 	                	// skip according to record type
@@ -595,9 +619,7 @@ public class LogFile {
 						}
 	                }
                 }
-                
-                
-                
+                                 
             }
         }
     }
@@ -658,10 +680,82 @@ public class LogFile {
     }
 
     /** Print out a human readable representation of the log */
-    public void print() throws IOException {
+    public void print(int imageLen) throws IOException {
         // some code goes here
     	
+    	long originOffset = raf.getFilePointer();
+    	raf.seek(0);
+    	
+    	Debug.log("\n======Print LOG======\n");
+    	Debug.log("checkPoint Offset: %d\n", raf.readLong());
+    	
+    	// print log records
+        while (raf.getFilePointer() < raf.length()) {
+         	int type;
+         	long tidLong;
+         	long recordPos;
+         	try {
+             	 type = raf.readInt();
+             	 tidLong = raf.readLong();
+         	}
+            catch (EOFException e) {                
+	         	Debug.log("Reach EOF when print log\n");
+	         	break;
+			}
+         	
+        	 
+         	// skip according to record type
+         	switch (type) {
+			case BEGIN_RECORD:
+				recordPos = raf.readLong();
+				Debug.log("Offset %d: BEGIN  [tid%d]\n", recordPos, tidLong);
+				break;
+			case COMMIT_RECORD:
+				recordPos = raf.readLong();
+				Debug.log("Offset %d: COMMIT [tid%d]\n", recordPos, tidLong);
+				break;
+			case ABORT_RECORD:
+				recordPos = raf.readLong();
+				Debug.log("Offset %d: ABORT  [tid%d]\n", recordPos, tidLong);
+				break;
+			case UPDATE_RECORD:
+				Page before = readPageData(raf);
+				Page after = readPageData(raf);
+				
+				recordPos = raf.readLong();
+				Debug.log("Offset %d: UPDATE [tid%d]\n", recordPos, tidLong);
+				
+				Debug.log("Before image\n%s", ((HeapPage) before).toString(imageLen));
+				Debug.log("After image\n%s", ((HeapPage) after).toString(imageLen));
+				
+				break;
+			case CHECKPOINT_RECORD:
+				// CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+				
+				int numTxns = raf.readInt();
+				
+				// outstanding txns (tidLong, 1stOffsetLong)
+				long[][] txns = new long[numTxns][2];
+				for (int i = 0; i < numTxns; i++) {
+					txns[i][0] = raf.readLong();
+					txns[i][1] = raf.readLong();
+				}
+				
+				recordPos = raf.readLong();
+				Debug.log("Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tidLong);
+				Debug.log("Txns:\n");
+				for (int i = 0; i < numTxns; i++) {
+					Debug.log("[tid%d, offset:%d]\n", txns[i][0], txns[i][1]);
+				}
+				break;
+			}
+         }
+        
+        raf.seek(originOffset);
+        
+        Debug.log("=====LOG END=====\n\n");
     }
+    
 
     public  synchronized void force() throws IOException {
         raf.getChannel().force(true);
