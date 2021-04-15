@@ -186,7 +186,8 @@ public class BufferPool {
     	Page resPage = dbFile.readPage(pid);
     	//System.out.println("load page for " + tableName + " page #" + pid.pageNumber());
 
-    	
+    	// when readPage, new Page() will setBeforeImage automatically
+    	// resPage.setBeforeImage();
     	cache.put(pid, resPage);
     	numUsedPages++;
         return resPage;
@@ -263,27 +264,38 @@ public class BufferPool {
     					Page page = getPageWithoutLock(pid, false);
     					TransactionId dirtier = page.getDirtier();
     					
-    					flushPage(pid);
+    					Debug.log("commit txn%d, page%d dirtier: %s", tid.getId(), pid.pageNumber(), dirtier);
+    					// if a page is not in cache, it is already flushed before commit
+    					if (cache.containsKey(pid)) {
+    						flushPage(pid);
+    						Debug.log("commit txn%d, contains page%d, flush", tid.getId(), pid.pageNumber());
+    					}	
     					
+    					// check dirtier to set before image	
+    					// Even clean, should setBeforeImage
+    					// because have to keep beforeImage the image this page first read in during current txn
+    					// we can't setBeforeImage when flush page
+    					// can only update beforeImage after commit a txn
+    					// which is for the next txn if this page is not flushed before next txn use
+    					// if the page is flushed before next txn use, the next txn will read again, and so setBeforeImage
     					
-    					// check dirtier to set before image		
-						if (dirtier != null && dirtier.equals(tid)) {
-							Debug.log("in txnComplete, dirtier=%d, tid=%d", dirtier.getId(), tid.getId());
-					    	/**
-					     	* Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
-					   	  	* UW CSE444 Lab5 1.Started
-					        * Add UW's supplement codes for log and recovery
-					        */
-					    	// use current page contents as the before-image
-					        // for the next transaction that modifies this page.
-					        page.setBeforeImage();
-						   	 /**
-					        * UW's supplement codes for log and recovery end
-					        */
-					        
-							Debug.log("set before image %d for page%s, dirtier: txn%d", 
-									((HeapPage)page).oldData.hashCode(), pid, tid.getId());
-						}
+						// if (dirtier != null && dirtier.equals(tid)) {
+							//Debug.log("in txnComplete, dirtier=%d, tid=%d", dirtier.getId(), tid.getId());
+				    	/**
+				     	* Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
+				   	  	* UW CSE444 Lab5 1.Started
+				        * Add UW's supplement codes for log and recovery
+				        */
+				    	// use current page contents as the before-image
+				        // for the next transaction that modifies this page.
+				        page.setBeforeImage();
+					   	 /**
+				        * UW's supplement codes for log and recovery end
+				        */
+				        
+						Debug.log("set before image %d for page%s, dirtier: txn%d", 
+								((HeapPage)page).oldData.hashCode(), pid, tid.getId());
+						// }
     				} catch (IOException e) {
     					e.printStackTrace();
     				}
@@ -314,6 +326,8 @@ public class BufferPool {
     	if (putInCache) {
         	try {
     			cache.put(pid, resPage);
+    	    	// when readPage, new Page() will setBeforeImage automatically
+    	    	// resPage.setBeforeImage();
     		} catch (DbException e) {
     			e.printStackTrace();
     		}
@@ -343,6 +357,7 @@ public class BufferPool {
     	
     	ArrayList<Page> ditryPages = table.insertTuple(tid, t);
     	for (Page page : ditryPages) {
+    		Debug.log("insert in bufferPool, page%d, dirtier txn%d", page.getId().pageNumber(), tid.getId());
     		page.markDirty(true, tid);
 			// update to the new version of dirty pages, put in BufferPool
 	    	cache.put(page.getId(), page);
@@ -434,7 +449,7 @@ public class BufferPool {
     	
     	// flushedPage may be null when pid is not in pageMap (i.e. LRU cache)
     	tableFile.writePage(flushedPage);
-    	flushedPage.markDirty(false, flushedPage.getDirtier());
+    	flushedPage.markDirty(false, null);
     }
     
     /**
