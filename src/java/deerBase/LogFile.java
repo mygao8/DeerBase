@@ -387,9 +387,15 @@ public class LogFile {
         logTruncate();
     }
 
+    // 1. find checkpoint
+    // 2. find the min offset in all outstanding txns in checkpoint and the offset of checkpoint
+    // 3. discard all logs before the min offset from step 2
+    // 4. rewrite
     /** Truncate any unneeded portion of the log to reduce its space
         consumption */
     public synchronized void logTruncate() throws IOException {
+    	Debug.log("before rewrite");
+    	print(5);
         preAppend();
         raf.seek(0);
         long cpLoc = raf.readLong();
@@ -481,7 +487,9 @@ public class LogFile {
         newFile.delete();
 
         currentOffset = raf.getFilePointer();
-        //print();
+        
+        Debug.log("after rewrite");
+        print(5);
     }
 
     /** Rollback the specified transaction, setting the state of any
@@ -619,7 +627,9 @@ public class LogFile {
 						}
 	                }
                 }
-                                 
+                
+                // don't forget to recover the offset for future write log
+                raf.seek(currentOffset);
             }
         }
     }
