@@ -6,6 +6,8 @@ import java.util.*;
 
 import javax.imageio.IIOException;
 
+import com.google.common.io.Files;
+
 import java.lang.reflect.*;
 
 /**
@@ -118,7 +120,7 @@ public class LogFile {
         @param f The log file's name
     */
     public LogFile(File f) throws IOException {
-	this.logFile = f;
+    	this.logFile = f;
         raf = new RandomAccessFile(f, "rw");
         recoveryUndecided = true;
 
@@ -175,7 +177,7 @@ public class LogFile {
                 raf.writeLong(tid.getId());
                 raf.writeLong(currentOffset);
                 currentOffset = raf.getFilePointer();
-                force();
+                force(raf);
                 tidToFirstLogRecord.remove(tid.getId());
                 
                 // print log
@@ -198,7 +200,7 @@ public class LogFile {
         raf.writeLong(tid.getId());
         raf.writeLong(currentOffset);
         currentOffset = raf.getFilePointer();
-        force();
+        force(raf);
         tidToFirstLogRecord.remove(tid.getId());
         
         // print log
@@ -356,7 +358,7 @@ public class LogFile {
                 long startCpOffset, endCpOffset;
                 Set<Long> keys = tidToFirstLogRecord.keySet();
                 Iterator<Long> els = keys.iterator();
-                force();
+                force(raf);
                 Database.getBufferPool().flushAllPages();
                 startCpOffset = raf.getFilePointer();
                 raf.writeInt(CHECKPOINT_RECORD);
@@ -476,12 +478,28 @@ public class LogFile {
                 break;
             }
         }
-
+        
+        //force(logNew);
+        
         Debug.log("TRUNCATING LOG;  WAS " + raf.length() + " BYTES ; NEW START : " + minLogRecord + " NEW LENGTH: " + (raf.length() - minLogRecord));
 
+        force(raf);
         raf.close();
-        logFile.delete();
-        newFile.renameTo(logFile);
+        
+//        try {
+//        	java.nio.file.Files.delete(logFile.toPath());
+//        } catch (Exception e) {
+//        	e.printStackTrace();
+//        }
+//        
+//        if (!logFile.delete()) {
+//        	throw new IOException("Failed to delete old log in rewrite");
+//        }
+//     
+//        if (!newFile.renameTo(logFile)) {
+//        	throw new IOException("Failed to rename tmp log in rewrite");
+//        }
+        
         raf = new RandomAccessFile(logFile, "rw");
         raf.seek(raf.length());
         newFile.delete();
@@ -685,6 +703,166 @@ public class LogFile {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
+                
+                raf.seek(0);
+                long checkPointOffset = raf.readLong();
+                
+                if (checkPointOffset != -1) {
+                	raf.seek(checkPointOffset);
+                }
+                
+                // Log Record:
+                // typeInt, tidLong
+                // 
+                // UPDATE: before image, after image
+                // image: pageUTF, pidUTF (utfLenShort, [byte, byte, ..])
+                // pageInfoLenInt, [int, int, ..]
+                // pageDataLenInt, [byte, byte, ..]
+                // 
+                // CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+                // 
+                // startOffsetLong
+                int type = raf.readInt();
+                long tid = raf.readLong();
+                long recordPos;
+                if (type != CHECKPOINT_RECORD || tid != -1) {
+                	Debug.log("Recover: checkPointOffset ERROR, Offset:%d [type%d, tid%d]", checkPointOffset, type, tid);
+                	return;
+                }
+                
+                final long OUTSTANDING = -1L;
+                
+                // NOTE: the before image of each update record of a txn will be the same
+                // because the before image is set when the last txn committed
+                // and during the current txn, if a update exists, current txn holds XLock
+                // no other txns can update a page that current txn already updated
+                
+                
+                // map tid to offset of the last update to redo. When encounter commit, redo directly
+                // the remaining txns in this map  after reading the whole log are losers, undo them
+                HashMap<Long, Long> latestUpdateMap = new HashMap<>();
+                
+                // mark outstanding txns as losers initially
+                int numTxns = raf.readInt();
+                // outstanding txns (tidLong, 1stOffsetLong)
+				long[][] txns = new long[numTxns][2];
+				for (int i = 0; i < numTxns; i++) {
+					txns[i][0] = raf.readLong();
+					txns[i][1] = raf.readLong();
+				}
+				
+				recordPos = raf.readLong();
+				Debug.log("Recover: Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tid);
+				for (int i = 0; i < numTxns; i++) {
+					// use -1L to mark this is not the update record offset
+					latestUpdateMap.put(txns[i][0], OUTSTANDING);
+					Debug.log("Recover: outstanding txn: [tid%d, offset:%d]\n", txns[i][0], txns[i][1]);
+				}			
+                
+				
+                while (true) {
+                	try {
+                		 recordPos = raf.getFilePointer();
+                    	 type = raf.readInt();
+                    	 tid = raf.readLong();
+                    	 Debug.log("Recover: read log [offset%d type:%d, tid%d]\n", 
+                    			 recordPos, type, tid);
+                	}
+                    catch (EOFException e) {                
+                    	Debug.log("Reach EOF when recover\n");
+                    	break;
+    				}
+                	
+                	if (recordPos > raf.length()) break;
+                	
+                	
+                	// skip according to record type
+                	int bytesSkipped;
+                	switch (type) {
+					case BEGIN_RECORD:
+						// No need to store. If only begin without update, no redo / undo.			
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case COMMIT_RECORD:
+						// find a wineer, redo
+						long latestUpdateOffset = latestUpdateMap.remove(tid);
+						Debug.log("Recover: redo txn%d with update log [offset: %d]", tid, latestUpdateOffset);
+						
+						if (latestUpdateOffset != OUTSTANDING) {
+						long originOffset = raf.getFilePointer();
+						
+						// deal with latest UPDATE to redo
+						raf.seek(latestUpdateOffset + RECORD_BEGIN_SIZE);
+						Page beforeImage = readPageData(raf);
+						Page afterImage = readPageData(raf);
+						
+						int tableId = afterImage.getId().getTableId();
+						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+						Debug.log("Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+								afterImage.getId().toString(), latestUpdateOffset, tid);
+						dbFile.writePage(afterImage);
+
+						Debug.log("Recover: \n");
+						Debug.log("Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
+						Debug.log("After image:\n%s\n", ((HeapPage) afterImage).toString(5));
+						// done redo
+						
+						// back to commit record, and skip record end
+						raf.seek(originOffset);
+						}
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case ABORT_RECORD:
+						// No need to undo. First rollback, then write ABORT log.
+						// exist abort log, means already rollback
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case UPDATE_RECORD:
+						latestUpdateMap.put(tid, recordPos);
+						
+						// skip before image
+						readPageData(raf);
+						// skip after image
+						readPageData(raf);
+						
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case CHECKPOINT_RECORD:
+						// Should be impossible, we started from the last checkpoint
+						Debug.log("Recover: ERROR, find newer checkpoint");
+						// CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+						
+						numTxns = raf.readInt();
+						// outstanding txns (tidLong, 1stOffsetLong)
+						int toSkip = (LONG_SIZE * 2) * numTxns;
+						bytesSkipped = raf.skipBytes(toSkip);
+						if (bytesSkipped != toSkip) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					}
+                }
+                
+                // set current offset
+                currentOffset = raf.getFilePointer();
+                force(raf);
             }
          }
     }
@@ -766,8 +944,11 @@ public class LogFile {
         Debug.log("=====LOG END=====\n\n");
     }
     
-
-    public  synchronized void force() throws IOException {
+    public synchronized void force() throws IOException {
+        raf.getChannel().force(true);
+    }
+    
+    public synchronized void force(RandomAccessFile raf) throws IOException {
         raf.getChannel().force(true);
     }
 
