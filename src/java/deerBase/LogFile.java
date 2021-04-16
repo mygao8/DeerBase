@@ -6,8 +6,6 @@ import java.util.*;
 
 import javax.imageio.IIOException;
 
-import com.google.common.io.Files;
-
 import java.lang.reflect.*;
 
 /**
@@ -694,6 +692,10 @@ public class LogFile {
         }
     }
 
+    // NOTE: the before image of each update record of a txn will be the same
+    // because the before image is set when the last txn committed
+    // and during the current txn, if a update exists, current txn holds XLock
+    // no other txns can update a page that current txn already updated
     /** Recover the database system by ensuring that the updates of
         committed transactions are installed and that the
         updates of uncommitted transactions are not installed.
@@ -701,68 +703,72 @@ public class LogFile {
     public void recover() throws IOException {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
+            	print(5);
+            	
                 recoveryUndecided = false;
                 // some code goes here
+                
+                final Long NO_UPDATE = -1L;
+                final Long COMMIT = -2L;
+                        
+                // map tid to offset of the last update to redo. When encounter commit, redo directly
+                // the remaining txns in this map  after reading the whole log are losers, undo them
+                HashMap<Long, Long> latestUpdateMap = new HashMap<>();
+                HashMap<Long, Long> outstandingTxnBeginOffsetMap = new HashMap<>();
                 
                 raf.seek(0);
                 long checkPointOffset = raf.readLong();
                 
                 if (checkPointOffset != -1) {
                 	raf.seek(checkPointOffset);
+                
+	                // Log Record:
+	                // typeInt, tidLong
+	                // 
+	                // UPDATE: before image, after image
+	                // image: pageUTF, pidUTF (utfLenShort, [byte, byte, ..])
+	                // pageInfoLenInt, [int, int, ..]
+	                // pageDataLenInt, [byte, byte, ..]
+	                // 
+	                // CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+	                // 
+	                // startOffsetLong
+                	
+	                int type = raf.readInt();
+	                long tid = raf.readLong();
+	                long recordPos;
+	                if (type != CHECKPOINT_RECORD || tid != -1) {
+	                	Debug.log("Recover: checkPointOffset ERROR, Offset:%d [type%d, tid%d]", checkPointOffset, type, tid);
+	                	return;
+	                }	                
+	                
+	                // mark outstanding txns as losers initially
+	                int numTxns = raf.readInt();
+	                // outstanding txns (tidLong, beginOffsetLong)
+					long[][] outstandingTxns = new long[numTxns][2];
+					for (int i = 0; i < numTxns; i++) {
+						outstandingTxns[i][0] = raf.readLong();
+						outstandingTxns[i][1] = raf.readLong();
+						
+						outstandingTxnBeginOffsetMap.put(outstandingTxns[i][0], outstandingTxns[i][1]);
+						// use NO_UPDATE to mark this is not the update record offset
+						latestUpdateMap.put(outstandingTxns[i][0], NO_UPDATE);
+					}
+					
+					recordPos = raf.readLong();
+					Debug.log("Recover: Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tid);
+					for (int i = 0; i < numTxns; i++) {
+						Debug.log("Recover: outstanding txn: [tid%d, offset:%d]\n", outstandingTxns[i][0], outstandingTxns[i][1]);
+					}
                 }
-                
-                // Log Record:
-                // typeInt, tidLong
-                // 
-                // UPDATE: before image, after image
-                // image: pageUTF, pidUTF (utfLenShort, [byte, byte, ..])
-                // pageInfoLenInt, [int, int, ..]
-                // pageDataLenInt, [byte, byte, ..]
-                // 
-                // CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
-                // 
-                // startOffsetLong
-                int type = raf.readInt();
-                long tid = raf.readLong();
-                long recordPos;
-                if (type != CHECKPOINT_RECORD || tid != -1) {
-                	Debug.log("Recover: checkPointOffset ERROR, Offset:%d [type%d, tid%d]", checkPointOffset, type, tid);
-                	return;
-                }
-                
-                final long OUTSTANDING = -1L;
-                
-                // NOTE: the before image of each update record of a txn will be the same
-                // because the before image is set when the last txn committed
-                // and during the current txn, if a update exists, current txn holds XLock
-                // no other txns can update a page that current txn already updated
-                
-                
-                // map tid to offset of the last update to redo. When encounter commit, redo directly
-                // the remaining txns in this map  after reading the whole log are losers, undo them
-                HashMap<Long, Long> latestUpdateMap = new HashMap<>();
-                
-                // mark outstanding txns as losers initially
-                int numTxns = raf.readInt();
-                // outstanding txns (tidLong, 1stOffsetLong)
-				long[][] txns = new long[numTxns][2];
-				for (int i = 0; i < numTxns; i++) {
-					txns[i][0] = raf.readLong();
-					txns[i][1] = raf.readLong();
-				}
-				
-				recordPos = raf.readLong();
-				Debug.log("Recover: Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tid);
-				for (int i = 0; i < numTxns; i++) {
-					// use -1L to mark this is not the update record offset
-					latestUpdateMap.put(txns[i][0], OUTSTANDING);
-					Debug.log("Recover: outstanding txn: [tid%d, offset:%d]\n", txns[i][0], txns[i][1]);
-				}			
-                
 				
                 while (true) {
+                	int type;
+                	long tid, recordPos;
                 	try {
                 		 recordPos = raf.getFilePointer();
+                		 if (recordPos >= raf.length()) break;
+                		 
                     	 type = raf.readInt();
                     	 tid = raf.readLong();
                     	 Debug.log("Recover: read log [offset%d type:%d, tid%d]\n", 
@@ -771,10 +777,7 @@ public class LogFile {
                     catch (EOFException e) {                
                     	Debug.log("Reach EOF when recover\n");
                     	break;
-    				}
-                	
-                	if (recordPos > raf.length()) break;
-                	
+    				}                	
                 	
                 	// skip according to record type
                 	int bytesSkipped;
@@ -787,32 +790,39 @@ public class LogFile {
 						}
 						break;
 					case COMMIT_RECORD:
-						// find a wineer, redo
-						long latestUpdateOffset = latestUpdateMap.remove(tid);
+						// find a winner, redo
+						Long latestUpdateOffset = latestUpdateMap.remove(tid);
 						Debug.log("Recover: redo txn%d with update log [offset: %d]", tid, latestUpdateOffset);
 						
-						if (latestUpdateOffset != OUTSTANDING) {
-						long originOffset = raf.getFilePointer();
-						
-						// deal with latest UPDATE to redo
-						raf.seek(latestUpdateOffset + RECORD_BEGIN_SIZE);
-						Page beforeImage = readPageData(raf);
-						Page afterImage = readPageData(raf);
-						
-						int tableId = afterImage.getId().getTableId();
-						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
-						Debug.log("Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
-								afterImage.getId().toString(), latestUpdateOffset, tid);
-						dbFile.writePage(afterImage);
-
-						Debug.log("Recover: \n");
-						Debug.log("Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
-						Debug.log("After image:\n%s\n", ((HeapPage) afterImage).toString(5));
-						// done redo
-						
-						// back to commit record, and skip record end
-						raf.seek(originOffset);
+						// NO_UPDATE: outstanding txn, no updates after checkpoint
+						// may update before checkpoint, may not. need to mark
+						if (latestUpdateOffset == NO_UPDATE) {
+							latestUpdateMap.put(tid, COMMIT);
 						}
+						else if (latestUpdateOffset != null) { // null: txn starts after checkpoint, but no updates until commit
+							long originOffset = raf.getFilePointer();
+							
+							// deal with latest UPDATE to redo
+							raf.seek(latestUpdateOffset + RECORD_BEGIN_SIZE);
+							Page beforeImage = readPageData(raf);
+							Page afterImage = readPageData(raf);
+							
+							int tableId = afterImage.getId().getTableId();
+							DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+							Debug.log("Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+									afterImage.getId().toString(), latestUpdateOffset, tid);
+							dbFile.writePage(afterImage);
+	
+							Debug.log("Recover: \n");
+							Debug.log("Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
+							Debug.log("After image:\n%s\n", ((HeapPage) afterImage).toString(5));
+							// done redo
+							
+							// back to commit record, and skip record end
+							raf.seek(originOffset);
+						}
+						
+						
 						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
 						if (bytesSkipped != RECORD_END_SIZE) {
 							throw new IIOException("EOF: " + raf.getFilePointer());
@@ -821,6 +831,9 @@ public class LogFile {
 					case ABORT_RECORD:
 						// No need to undo. First rollback, then write ABORT log.
 						// exist abort log, means already rollback
+						outstandingTxnBeginOffsetMap.remove(tid);
+						latestUpdateMap.remove(tid);
+						
 						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
 						if (bytesSkipped != RECORD_END_SIZE) {
 							throw new IIOException("EOF: " + raf.getFilePointer());
@@ -828,6 +841,9 @@ public class LogFile {
 						break;
 					case UPDATE_RECORD:
 						latestUpdateMap.put(tid, recordPos);
+						// if a outstanding txn has update after checkpoint
+						// no need to distinguish it with txns begin after checkpoint
+						outstandingTxnBeginOffsetMap.remove(tid);
 						
 						// skip before image
 						readPageData(raf);
@@ -844,7 +860,7 @@ public class LogFile {
 						Debug.log("Recover: ERROR, find newer checkpoint");
 						// CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
 						
-						numTxns = raf.readInt();
+						int numTxns = raf.readInt();
 						// outstanding txns (tidLong, 1stOffsetLong)
 						int toSkip = (LONG_SIZE * 2) * numTxns;
 						bytesSkipped = raf.skipBytes(toSkip);
@@ -860,7 +876,96 @@ public class LogFile {
 					}
                 }
                 
+                // check outstanding txns at first
+                // case1: not in map --update after checkpoint and commit. done, no need to concern
+                // case2: NO_UPDATE --no commit, no update after checkpoint, backward from checkpoint
+                //	case2.1: update before checkpoint ? 
+                //				undo with any beforeImage : already reach begin, no updates, discard
+                // case3: COMMIT --commit, no update after checkpoint, not sure update before checkpoint, backward from checkpoint
+                // 	case3.1: update before checkpoint ? 
+                //				redo with latest afterImage before checkpoint : already reach begin, no updates, discard
+                // case4: other offsets --update after checkpoint, same as txns begin after checkpoint now
+                
+                // how about no checkpoint??
+            	// backward read from checkpoint
+                long curRecordOffset = checkPointOffset;
+                while (outstandingTxnBeginOffsetMap.size() > 0) {
+                	raf.seek(curRecordOffset-LONG_SIZE);
+                	// beginning of current record
+                	curRecordOffset = raf.readLong();
+                	raf.seek(curRecordOffset);
+                	
+                	int type;
+                	long tid;
+                 	try {
+                     	 type = raf.readInt();
+                     	 tid = raf.readLong();
+                 	}
+                    catch (EOFException e) {                
+        	         	Debug.log("Reach EOF when print log\n");
+        	         	break;
+        			}
+                 	
+                	// if tid in map, if BEGIN, remove
+                	// if UPDATE. check COMMIT: redo or NO_UPDATE: undo
+                 	if (outstandingTxnBeginOffsetMap.containsKey(tid)) {
+                 		if (type == BEGIN_RECORD) {
+                 			outstandingTxnBeginOffsetMap.remove(tid);
+                 		} else if (type == UPDATE_RECORD) {
+                 			outstandingTxnBeginOffsetMap.remove(tid);
+                 			Long state = latestUpdateMap.remove(tid);
+                 			
+            				if (state == COMMIT) {
+            					// redo with after image
+                     			Page before = readPageData(raf);
+                				Page afterImage = readPageData(raf);
+                				
+                				int tableId = afterImage.getId().getTableId();
+    							DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+    							Debug.log("Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+    									afterImage.getId().toString(), curRecordOffset, tid);
+    							dbFile.writePage(afterImage);		
+            				} else if (state == NO_UPDATE) {
+            					// undo with before image
+            					Page beforeImage = readPageData(raf);
+                				
+                				int tableId = beforeImage.getId().getTableId();
+    							DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+    							Debug.log("Recover: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+    									beforeImage.getId().toString(), curRecordOffset, tid);
+    							dbFile.writePage(beforeImage);
+            				} else {
+            					Debug.log("Recover ERROR: oustandingTxn with update after checkpoint is not removed from map");
+            				}
+                 		} else {
+                 			Debug.log("Recover ERROR: backforward from checkpoint, outstanding txn log (Offset %d: COMMIT/ABORT [tid%d]",
+                 					curRecordOffset, tid);
+                 		}
+                 	}
+                }
+                                
+                
+                // finally, undo the remaining txns.
+                // all txns in map: with latest update, update but not commit after checkpoint
+                latestUpdateMap.forEach((tmpTid, latestOffset) -> {
+                	try {
+                		raf.seek(latestOffset + RECORD_BEGIN_SIZE);
+	                	Page beforeImage = readPageData(raf);
+	    				
+	    				int tableId = beforeImage.getId().getTableId();
+						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+						Debug.log("Recover: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+								beforeImage.getId().toString(), latestOffset, tmpTid);
+						dbFile.writePage(beforeImage);
+                	} catch (IOException e) {
+						// TODO: handle exception
+                		e.printStackTrace();
+					}
+                });
+                
+                
                 // set current offset
+                raf.seek(raf.length());
                 currentOffset = raf.getFilePointer();
                 force(raf);
             }
