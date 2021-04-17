@@ -76,6 +76,8 @@ for each active transaction.
 
 public class LogFile {
 
+	private final static int LogFileDebugLevel = Debug.CLOSE;
+	
     File logFile;
     RandomAccessFile raf;
     Boolean recoveryUndecided; // no call to recover() and no append to log
@@ -87,18 +89,21 @@ public class LogFile {
     static final int CHECKPOINT_RECORD = 5;
     static final long NO_CHECKPOINT_ID = -1;
 
-    static int INT_SIZE = 4;
-    static int LONG_SIZE = 8;
+    static final int INT_SIZE = 4;
+    static final int LONG_SIZE = 8;
+    
+    // beginning of the first record, skip the first long of checkpoint offset
+    static final int FIRST_RECORD_OFFSET = LONG_SIZE;
     
     // beginning of each record: typeInt, tidLong
-    static int RECORD_BEGIN_SIZE = INT_SIZE + LONG_SIZE;
+    static final int RECORD_BEGIN_SIZE = INT_SIZE + LONG_SIZE;
     // end of each record: startOffsetLong
-    static int RECORD_END_SIZE = LONG_SIZE;
+    static final int RECORD_END_SIZE = LONG_SIZE;
     
     // size of records with fixed length type
-    static int BEGIN_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
-    static int COMMIT_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
-    static int ABORT_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
+    static final int BEGIN_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
+    static final int COMMIT_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
+    static final int ABORT_SIZE = RECORD_BEGIN_SIZE + RECORD_END_SIZE;
     
     long currentOffset = -1;
     int pageSize;
@@ -164,7 +169,7 @@ public class LogFile {
 
             synchronized(this) {
                 preAppend();
-                //Debug.log("ABORT");
+                //Debug.log(LogFileDebugLevel, "ABORT");
                 //should we verify that this is a live transaction?
 
                 // must do this here, since rollback only works for
@@ -191,7 +196,7 @@ public class LogFile {
     */
     public synchronized void logCommit(TransactionId tid) throws IOException {
         preAppend();
-        Debug.log("COMMIT " + tid.getId());
+        Debug.log(LogFileDebugLevel, "COMMIT " + tid.getId());
         //should we verify that this is a live transaction?
 
         raf.writeInt(COMMIT_RECORD);
@@ -216,7 +221,7 @@ public class LogFile {
     public synchronized void logWrite(TransactionId tid, Page before,
                                        Page after)
         throws IOException  {
-        Debug.log("WRITE, offset = " + raf.getFilePointer());
+        Debug.log(LogFileDebugLevel, "WRITE, offset = " + raf.getFilePointer());
         preAppend();
         /* update record conists of
 
@@ -235,16 +240,16 @@ public class LogFile {
         currentOffset = raf.getFilePointer();
         
         
-        Debug.log("UPDATE: txn%d, before:%d [%s] dirtied by txn%d, after:%d \n", 
+        Debug.log(LogFileDebugLevel, "UPDATE: txn%d, before:%d [%s] dirtied by txn%d, after:%d \n", 
         		tid.getId(), before.hashCode(), ((HeapPage)after).oldData.toString(), tid.getId() , after.hashCode());
         
 //        if (tid.getId() == 1) {
-//        	Debug.log("BeforeImage:\n %s \n", ((HeapPage)before).toString(20));
-//        	Debug.log("AfterImage:\n %s \n", ((HeapPage)after).toString(20));
+//        	Debug.log(LogFileDebugLevel, "BeforeImage:\n %s \n", ((HeapPage)before).toString(20));
+//        	Debug.log(LogFileDebugLevel, "AfterImage:\n %s \n", ((HeapPage)after).toString(20));
 //        }
         
         
-        Debug.log("WRITE OFFSET = " + currentOffset);
+        Debug.log(LogFileDebugLevel, "WRITE OFFSET = " + currentOffset);
     }
 
     void writePageData(RandomAccessFile raf, Page p) throws IOException{
@@ -281,7 +286,11 @@ public class LogFile {
 
         String pageClassName = raf.readUTF();
         String idClassName = raf.readUTF();
-
+        Debug.log(LogFileDebugLevel, "readPageData: pageClassName %s, idClassName %s\n%s", 
+        		pageClassName, idClassName, Debug.stackTrace());
+        Debug.log(LogFileDebugLevel, "pageClassName.len=%d, ==deerBase.HeapPage? %b. idClassName.len=%d", 
+        		pageClassName.length(), "deerBase.HeapPage".equals(pageClassName), idClassName.length());
+        
         try {
             Class<?> idClass = Class.forName(idClassName);
             Class<?> pageClass = Class.forName(pageClassName);
@@ -306,7 +315,7 @@ public class LogFile {
 
             newPage = (Page)pageConsts[0].newInstance(pageArgs);
 
-            //            Debug.log("READ PAGE OF TYPE " + pageClassName + ", table = " + newPage.getId().getTableId() + ", page = " + newPage.getId().pageno());
+            //            Debug.log(LogFileDebugLevel, "READ PAGE OF TYPE " + pageClassName + ", table = " + newPage.getId().getTableId() + ", page = " + newPage.getId().pageno());
         } catch (ClassNotFoundException e){
             e.printStackTrace();
             throw new IOException();
@@ -330,7 +339,7 @@ public class LogFile {
     */
     public synchronized  void logXactionBegin(TransactionId tid)
         throws IOException {
-        Debug.log("BEGIN");
+        Debug.log(LogFileDebugLevel, "BEGIN");
         if(tidToFirstLogRecord.get(tid.getId()) != null){
             System.err.printf("logXactionBegin: already began this tid\n");
             throw new IOException("double logXactionBegin()");
@@ -339,11 +348,11 @@ public class LogFile {
         raf.writeInt(BEGIN_RECORD);
         raf.writeLong(tid.getId());
         raf.writeLong(currentOffset);
-        Debug.log("put in map: txn%d, offset:%d", tid.getId(), currentOffset);
+        Debug.log(LogFileDebugLevel, "put in map: txn%d, offset:%d", tid.getId(), currentOffset);
         tidToFirstLogRecord.put(tid.getId(), currentOffset);
         currentOffset = raf.getFilePointer();
 
-        Debug.log("BEGIN OFFSET = " + currentOffset);
+        Debug.log(LogFileDebugLevel, "BEGIN OFFSET = " + currentOffset);
     }
 
     /** Checkpoint the log and write a checkpoint record. */
@@ -351,7 +360,7 @@ public class LogFile {
         //make sure we have buffer pool lock before proceeding
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
-                //Debug.log("CHECKPOINT, offset = " + raf.getFilePointer());
+                //Debug.log(LogFileDebugLevel, "CHECKPOINT, offset = " + raf.getFilePointer());
                 preAppend();
                 long startCpOffset, endCpOffset;
                 Set<Long> keys = tidToFirstLogRecord.keySet();
@@ -366,9 +375,9 @@ public class LogFile {
                 raf.writeInt(keys.size());
                 while (els.hasNext()) {
                     Long key = els.next();
-                    Debug.log("WRITING CHECKPOINT TRANSACTION ID: " + key);
+                    Debug.log(LogFileDebugLevel, "WRITING CHECKPOINT TRANSACTION ID: " + key);
                     raf.writeLong(key);
-                    //Debug.log("WRITING CHECKPOINT TRANSACTION OFFSET: " + tidToFirstLogRecord.get(key));
+                    //Debug.log(LogFileDebugLevel, "WRITING CHECKPOINT TRANSACTION OFFSET: " + tidToFirstLogRecord.get(key));
                     raf.writeLong(tidToFirstLogRecord.get(key));
                 }
 
@@ -380,7 +389,7 @@ public class LogFile {
                 raf.seek(endCpOffset);
                 raf.writeLong(currentOffset);
                 currentOffset = raf.getFilePointer();
-                //Debug.log("CP OFFSET = " + currentOffset);
+                //Debug.log(LogFileDebugLevel, "CP OFFSET = " + currentOffset);
             }
         }
 
@@ -394,7 +403,7 @@ public class LogFile {
     /** Truncate any unneeded portion of the log to reduce its space
         consumption */
     public synchronized void logTruncate() throws IOException {
-    	Debug.log("before rewrite");
+    	Debug.log(LogFileDebugLevel, "before rewrite");
     	print(5);
         preAppend();
         raf.seek(0);
@@ -439,7 +448,7 @@ public class LogFile {
                 long record_tid = raf.readLong();
                 long newStart = logNew.getFilePointer();
 
-                Debug.log("NEW START = " + newStart);
+                Debug.log(LogFileDebugLevel, "NEW START = " + newStart);
 
                 logNew.writeInt(type);
                 logNew.writeLong(record_tid);
@@ -463,7 +472,7 @@ public class LogFile {
                     }
                     break;
                 case BEGIN_RECORD:
-                	Debug.log("Rewrite: put in map txn%d, offset%d", record_tid, newStart);
+                	Debug.log(LogFileDebugLevel, "Rewrite: put in map txn%d, offset%d", record_tid, newStart);
                     tidToFirstLogRecord.put(record_tid,newStart);
                     break;
                 }
@@ -479,7 +488,7 @@ public class LogFile {
         
         //force(logNew);
         
-        Debug.log("TRUNCATING LOG;  WAS " + raf.length() + " BYTES ; NEW START : " + minLogRecord + " NEW LENGTH: " + (raf.length() - minLogRecord));
+        Debug.log(LogFileDebugLevel, "TRUNCATING LOG;  WAS " + raf.length() + " BYTES ; NEW START : " + minLogRecord + " NEW LENGTH: " + (raf.length() - minLogRecord));
 
         force(raf);
         raf.close();
@@ -504,7 +513,7 @@ public class LogFile {
 
         currentOffset = raf.getFilePointer();
         
-        Debug.log("after rewrite");
+        Debug.log(LogFileDebugLevel, "after rewrite");
         print(5);
     }
 
@@ -540,10 +549,10 @@ public class LogFile {
                 // skip begin record
                 raf.seek(beginOffset);    
                 
-                Debug.log("Roolback: set file ptr for txn%d, offset:%d, ptr:%d\n", 
+                Debug.log(LogFileDebugLevel, "Roolback: set file ptr for txn%d, offset:%d, ptr:%d\n", 
                 		tid.getId(), beginOffset, raf.getFilePointer());
                 long tmptid = 0;
-                Debug.log("Roolback: other txns offset. txn0:%d, txn1:%d, txn2:%d, txn3::%d",
+                Debug.log(LogFileDebugLevel, "Roolback: other txns offset. txn0:%d, txn1:%d, txn2:%d, txn3::%d",
                 		tidToFirstLogRecord.get(tmptid), tidToFirstLogRecord.get(tmptid+1), 
                 		tidToFirstLogRecord.get(tmptid+2), tidToFirstLogRecord.get(tmptid+3));
                 
@@ -557,11 +566,11 @@ public class LogFile {
                 		 offset = raf.getFilePointer();
                     	 type = raf.readInt();
                     	 tidLong = raf.readLong();
-                    	 Debug.log("Rollback: read log [offset%d type:%d, tid%d]\n", 
+                    	 Debug.log(LogFileDebugLevel, "Rollback: read log [offset%d type:%d, tid%d]\n", 
                     			 offset, type, tidLong);
                 	}
                     catch (EOFException e) {                
-                    	Debug.log("Reach EOF when roll back txn%d\n", tid.getId());
+                    	Debug.log(LogFileDebugLevel, "Reach EOF when roll back txn%d\n", tid.getId());
                     	break;
     				}
                 	if (offset > raf.length()) break;
@@ -577,14 +586,14 @@ public class LogFile {
 						int tableId = beforeImage.getId().getTableId();
 						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
 						if (numUpdate == 1) {
-							Debug.log("Rollback: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+							Debug.log(LogFileDebugLevel, "Rollback: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
 									beforeImage.getId().toString(), tmpOffset, tidLong);
 							dbFile.writePage(beforeImage);
 						}
 
-						Debug.log("Rollback: \n");
-						Debug.log("Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
-						Debug.log("After image:\n%s\n", ((HeapPage) afterImage).toString(5));
+						Debug.log(LogFileDebugLevel, "Rollback: \n");
+						Debug.log(LogFileDebugLevel, "Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
+						Debug.log(LogFileDebugLevel, "After image:\n%s\n", ((HeapPage) afterImage).toString(5));
 						
 						// restore raf pointer??
 						Database.getBufferPool().discardPage(beforeImage.getId());
@@ -717,7 +726,7 @@ public class LogFile {
                 HashMap<Long, Long> outstandingTxnBeginOffsetMap = new HashMap<>();
                 
                 raf.seek(0);
-                long checkPointOffset = raf.readLong();
+                final long checkPointOffset = raf.readLong();
                 
                 if (checkPointOffset != -1) {
                 	raf.seek(checkPointOffset);
@@ -738,7 +747,7 @@ public class LogFile {
 	                long tid = raf.readLong();
 	                long recordPos;
 	                if (type != CHECKPOINT_RECORD || tid != -1) {
-	                	Debug.log("Recover: checkPointOffset ERROR, Offset:%d [type%d, tid%d]", checkPointOffset, type, tid);
+	                	Debug.log(LogFileDebugLevel, "Recover: checkPointOffset ERROR, Offset:%d [type%d, tid%d]", checkPointOffset, type, tid);
 	                	return;
 	                }	                
 	                
@@ -756,9 +765,9 @@ public class LogFile {
 					}
 					
 					recordPos = raf.readLong();
-					Debug.log("Recover: Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tid);
+					Debug.log(LogFileDebugLevel, "Recover: Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tid);
 					for (int i = 0; i < numTxns; i++) {
-						Debug.log("Recover: outstanding txn: [tid%d, offset:%d]\n", outstandingTxns[i][0], outstandingTxns[i][1]);
+						Debug.log(LogFileDebugLevel, "Recover: outstanding txn: [tid%d, offset:%d]\n", outstandingTxns[i][0], outstandingTxns[i][1]);
 					}
                 }
 				
@@ -771,11 +780,11 @@ public class LogFile {
                 		 
                     	 type = raf.readInt();
                     	 tid = raf.readLong();
-                    	 Debug.log("Recover: read log [offset%d type:%d, tid%d]\n", 
+                    	 Debug.log(LogFileDebugLevel, "Recover: read log [offset%d type:%d, tid%d]\n", 
                     			 recordPos, type, tid);
                 	}
                     catch (EOFException e) {                
-                    	Debug.log("Reach EOF when recover\n");
+                    	Debug.log(LogFileDebugLevel, "Reach EOF when recover\n");
                     	break;
     				}                	
                 	
@@ -792,7 +801,7 @@ public class LogFile {
 					case COMMIT_RECORD:
 						// find a winner, redo
 						Long latestUpdateOffset = latestUpdateMap.remove(tid);
-						Debug.log("Recover: redo txn%d with update log [offset: %d]", tid, latestUpdateOffset);
+						Debug.log(LogFileDebugLevel, "Recover: redo txn%d with update log [offset: %d]", tid, latestUpdateOffset);
 						
 						// NO_UPDATE: outstanding txn, no updates after checkpoint
 						// may update before checkpoint, may not. need to mark
@@ -809,13 +818,13 @@ public class LogFile {
 							
 							int tableId = afterImage.getId().getTableId();
 							DbFile dbFile = Database.getCatalog().getDbFile(tableId);
-							Debug.log("Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+							Debug.log(LogFileDebugLevel, "Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]), because encounter COMMIT after checkpoint", 
 									afterImage.getId().toString(), latestUpdateOffset, tid);
 							dbFile.writePage(afterImage);
 	
-							Debug.log("Recover: \n");
-							Debug.log("Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
-							Debug.log("After image:\n%s\n", ((HeapPage) afterImage).toString(5));
+							Debug.log(LogFileDebugLevel, "Recover: \n");
+							Debug.log(LogFileDebugLevel, "Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
+							Debug.log(LogFileDebugLevel, "After image:\n%s\n", ((HeapPage) afterImage).toString(5));
 							// done redo
 							
 							// back to commit record, and skip record end
@@ -857,7 +866,7 @@ public class LogFile {
 						break;
 					case CHECKPOINT_RECORD:
 						// Should be impossible, we started from the last checkpoint
-						Debug.log("Recover: ERROR, find newer checkpoint");
+						Debug.log(LogFileDebugLevel, "Recover: ERROR, find newer checkpoint");
 						// CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
 						
 						int numTxns = raf.readInt();
@@ -876,6 +885,7 @@ public class LogFile {
 					}
                 }
                 
+                
                 // check outstanding txns at first
                 // case1: not in map --update after checkpoint and commit. done, no need to concern
                 // case2: NO_UPDATE --no commit, no update after checkpoint, backward from checkpoint
@@ -889,10 +899,15 @@ public class LogFile {
                 // how about no checkpoint??
             	// backward read from checkpoint
                 long curRecordOffset = checkPointOffset;
-                while (outstandingTxnBeginOffsetMap.size() > 0) {
+                while (outstandingTxnBeginOffsetMap.size() > 0) {                	
                 	raf.seek(curRecordOffset-LONG_SIZE);
                 	// beginning of current record
                 	curRecordOffset = raf.readLong();
+                	if (curRecordOffset < FIRST_RECORD_OFFSET) {
+                		Debug.log(LogFileDebugLevel, "Recover ERROR: reach the begining of print log, but there is still outstanding txns");
+                		break;
+                	}
+                	
                 	raf.seek(curRecordOffset);
                 	
                 	int type;
@@ -902,7 +917,7 @@ public class LogFile {
                      	 tid = raf.readLong();
                  	}
                     catch (EOFException e) {                
-        	         	Debug.log("Reach EOF when print log\n");
+        	         	Debug.log(LogFileDebugLevel, "Reach EOF when print log\n");
         	         	break;
         			}
                  	
@@ -911,6 +926,7 @@ public class LogFile {
                  	if (outstandingTxnBeginOffsetMap.containsKey(tid)) {
                  		if (type == BEGIN_RECORD) {
                  			outstandingTxnBeginOffsetMap.remove(tid);
+                 			latestUpdateMap.remove(tid);
                  		} else if (type == UPDATE_RECORD) {
                  			outstandingTxnBeginOffsetMap.remove(tid);
                  			Long state = latestUpdateMap.remove(tid);
@@ -922,7 +938,7 @@ public class LogFile {
                 				
                 				int tableId = afterImage.getId().getTableId();
     							DbFile dbFile = Database.getCatalog().getDbFile(tableId);
-    							Debug.log("Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+    							Debug.log(LogFileDebugLevel, "Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]), because encounter UPDATE when backforward", 
     									afterImage.getId().toString(), curRecordOffset, tid);
     							dbFile.writePage(afterImage);		
             				} else if (state == NO_UPDATE) {
@@ -931,31 +947,35 @@ public class LogFile {
                 				
                 				int tableId = beforeImage.getId().getTableId();
     							DbFile dbFile = Database.getCatalog().getDbFile(tableId);
-    							Debug.log("Recover: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+    							Debug.log(LogFileDebugLevel, "Recover: undo update with page%s, log (Offset %d: UPDATE [tid%d]), because encounter UPDATE when backforward", 
     									beforeImage.getId().toString(), curRecordOffset, tid);
     							dbFile.writePage(beforeImage);
             				} else {
-            					Debug.log("Recover ERROR: oustandingTxn with update after checkpoint is not removed from map");
+            					Debug.log(LogFileDebugLevel, "Recover ERROR: oustandingTxn with update after checkpoint is not removed from map");
             				}
                  		} else {
-                 			Debug.log("Recover ERROR: backforward from checkpoint, outstanding txn log (Offset %d: COMMIT/ABORT [tid%d]",
+                 			Debug.log(LogFileDebugLevel, "Recover ERROR: backforward from checkpoint, outstanding txn log (Offset %d: COMMIT/ABORT [tid%d]",
                  					curRecordOffset, tid);
                  		}
                  	}
                 }
                                 
                 
+                print(5);
                 // finally, undo the remaining txns.
                 // all txns in map: with latest update, update but not commit after checkpoint
-                latestUpdateMap.forEach((tmpTid, latestOffset) -> {
+                latestUpdateMap.forEach((tid, latestUpdateOffset) -> {
                 	try {
-                		raf.seek(latestOffset + RECORD_BEGIN_SIZE);
+                		Debug.log(LogFileDebugLevel, "\n");
+						Debug.log(LogFileDebugLevel, "Recover: undo update with log (Offset %d: UPDATE [tid%d]), this txn updates after checkpoint", 
+								latestUpdateOffset, tid);
+						
+                		raf.seek(latestUpdateOffset + RECORD_BEGIN_SIZE);
 	                	Page beforeImage = readPageData(raf);
 	    				
 	    				int tableId = beforeImage.getId().getTableId();
 						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
-						Debug.log("Recover: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
-								beforeImage.getId().toString(), latestOffset, tmpTid);
+
 						dbFile.writePage(beforeImage);
                 	} catch (IOException e) {
 						// TODO: handle exception
@@ -979,8 +999,8 @@ public class LogFile {
     	long originOffset = raf.getFilePointer();
     	raf.seek(0);
     	
-    	Debug.log("\n======Print LOG======\n");
-    	Debug.log("checkPoint Offset: %d\n", raf.readLong());
+    	Debug.log(LogFileDebugLevel, "\n======Print LOG======\n");
+    	Debug.log(LogFileDebugLevel, "checkPoint Offset: %d\n", raf.readLong());
     	
     	// print log records
         while (raf.getFilePointer() < raf.length()) {
@@ -992,7 +1012,7 @@ public class LogFile {
              	 tidLong = raf.readLong();
          	}
             catch (EOFException e) {                
-	         	Debug.log("Reach EOF when print log\n");
+	         	Debug.log(LogFileDebugLevel, "Reach EOF when print log\n");
 	         	break;
 			}
          	
@@ -1001,25 +1021,25 @@ public class LogFile {
          	switch (type) {
 			case BEGIN_RECORD:
 				recordPos = raf.readLong();
-				Debug.log("Offset %d: BEGIN  [tid%d]\n", recordPos, tidLong);
+				Debug.log(LogFileDebugLevel, "Offset %d: BEGIN  [tid%d]\n", recordPos, tidLong);
 				break;
 			case COMMIT_RECORD:
 				recordPos = raf.readLong();
-				Debug.log("Offset %d: COMMIT [tid%d]\n", recordPos, tidLong);
+				Debug.log(LogFileDebugLevel, "Offset %d: COMMIT [tid%d]\n", recordPos, tidLong);
 				break;
 			case ABORT_RECORD:
 				recordPos = raf.readLong();
-				Debug.log("Offset %d: ABORT  [tid%d]\n", recordPos, tidLong);
+				Debug.log(LogFileDebugLevel, "Offset %d: ABORT  [tid%d]\n", recordPos, tidLong);
 				break;
 			case UPDATE_RECORD:
 				Page before = readPageData(raf);
 				Page after = readPageData(raf);
 				
 				recordPos = raf.readLong();
-				Debug.log("Offset %d: UPDATE [tid%d]\n", recordPos, tidLong);
+				Debug.log(LogFileDebugLevel, "Offset %d: UPDATE [tid%d]\n", recordPos, tidLong);
 				
-				Debug.log("Before image\n%s", ((HeapPage) before).toString(imageLen));
-				Debug.log("After image\n%s", ((HeapPage) after).toString(imageLen));
+				Debug.log(LogFileDebugLevel, "Before image\n%s", ((HeapPage) before).toString(imageLen));
+				Debug.log(LogFileDebugLevel, "After image\n%s", ((HeapPage) after).toString(imageLen));
 				
 				break;
 			case CHECKPOINT_RECORD:
@@ -1035,10 +1055,10 @@ public class LogFile {
 				}
 				
 				recordPos = raf.readLong();
-				Debug.log("Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tidLong);
-				Debug.log("Txns:\n");
+				Debug.log(LogFileDebugLevel, "Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tidLong);
+				Debug.log(LogFileDebugLevel, "Txns:\n");
 				for (int i = 0; i < numTxns; i++) {
-					Debug.log("[tid%d, offset:%d]\n", txns[i][0], txns[i][1]);
+					Debug.log(LogFileDebugLevel, "[tid%d, offset:%d]\n", txns[i][0], txns[i][1]);
 				}
 				break;
 			}
@@ -1046,7 +1066,7 @@ public class LogFile {
         
         raf.seek(originOffset);
         
-        Debug.log("=====LOG END=====\n\n");
+        Debug.log(LogFileDebugLevel, "=====LOG END=====\n\n");
     }
     
     public synchronized void force() throws IOException {

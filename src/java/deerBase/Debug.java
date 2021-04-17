@@ -15,12 +15,12 @@ import java.util.Arrays;
  */
 
 public class Debug {
-  private static final int DEBUG_LEVEL; // now: 2 for all (deerbase and test), 1 for deerbase, 0 for nothing
+  private static int DEBUG_LEVEL; // now: 2 for all (deerbase and test), 1 for deerbase, 0 for nothing
   static {
       String debug = System.getProperty("deerBase.Debug");
       if (debug == null) {
           // No system property = disabled
-          DEBUG_LEVEL = 2; // null to close all
+          DEBUG_LEVEL = 2; // -1 to close all
       } else if (debug == "") {
           // Empty property = level 0
           DEBUG_LEVEL = 0;
@@ -88,5 +88,13 @@ public class Debug {
 					  stackTraces,
 					  2, Math.min(DEFAULT_STACK_TRACE_DEPTH+2, stackTraces.length)-1
 					  ));
+  }
+  
+  public static void close() {
+	  DEBUG_LEVEL = -1;
+  }
+  
+  public static void open() {
+	  DEBUG_LEVEL = 2;
   }
 }

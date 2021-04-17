@@ -132,277 +132,278 @@ public class LogTest extends DeerBaseTestBase {
         hf3 = Utility.createEmptyHeapFile(file3.getAbsolutePath(), 2);
     }
 
-//    @Test public void PatchTest()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//
-//        // *** Test:
-//        // check that BufferPool.flushPage() calls LogFile.logWrite().
-//        doInsert(hf1, 1, 2);
-//
-//        if(Database.getLogFile().getTotalRecords() != 4)
-//            throw new RuntimeException("LogTest: wrong # of log records; patch failed?");
-//
-//        // *** Test:
-//        // check that BufferPool.transactionComplete(commit=true)
-//        // called Page.setBeforeImage().
-//        Transaction t1 = new Transaction();
-//        t1.start();
-//        Page p = Database.getBufferPool().getPage(t1.getId(),
-//                                                  new HeapPageId(hf1.getId(), 0),
-//                                                  Permissions.READ_ONLY);
-//        
-//        Page p1 = p.getBeforeImage();
-//        
-//        Debug.log("PatchTest!! now in buffer\n%s", ((HeapPage) p).toString(5));
-//        Debug.log("PatchTest!! before image\n%s", ((HeapPage) p1).toString(5));
-//        
-//        Boolean same = Arrays.equals(p.getPageData(),
-//                                     p1.getPageData());
-//        if(same == false)
-//            throw new RuntimeException("LogTest:setBeforeImage() not called? patch failed?");
-//    }
-//
-//    @Test public void TestFlushAll()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//
-//        // *** Test:
-//        // check that flushAllPages writes the HeapFile
-//        doInsert(hf1, 1, 2);
-//
-//        Transaction t1 = new Transaction();
-//        t1.start();
-//        HeapPage xp1 = (HeapPage) hf1.readPage(new HeapPageId(hf1.getId(), 0));
-//        insertRow(hf1, t1, 3, 0);
-//        Database.getBufferPool().flushAllPages();
-//        HeapPage xp2 = (HeapPage) hf1.readPage(new HeapPageId(hf1.getId(), 0));
-//
-//        if(xp1.getNumEmptySlots() == xp2.getNumEmptySlots())
-//            throw new RuntimeException("LogTest: flushAllPages() had no effect");
-//    }
-//
-//    @Test public void TestCommitCrash()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//
-//        // *** Test:
-//        // insert, crash, recover: data should still be there
-//
-//        doInsert(hf1, 1, 2);
-//
-//        crash();
-//
-//        Transaction t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 2, true);
-//        look(hf1, t, 3, false);
-//        t.commit();
-//    }
-//
-//    @Test public void TestAbort()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//        doInsert(hf1, 1, 2);
-//
-//        // *** Test:
-//        // insert, abort: data should not be there
-//        // flush pages directly to heap file to defeat NO-STEAL policy
-//
-//        dontInsert(hf1, 4, -1);
-//
-//        Transaction t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 2, true);
-//        look(hf1, t, 3, false);
-//        look(hf1, t, 4, false);
-//        t.commit();
-//    }
-//
-//    @Test public void TestAbortCommitInterleaved()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//        Debug.log("before doInsert\n");
-//        doInsert(hf1, 1, 2);
-//        Debug.log("after committing doInsert\n");
-//        
-//        // *** Test:
-//        // T1 start, T2 start and commit, T1 abort
-//
-//        Transaction t1 = new Transaction();
-//        t1.start();
-//        Debug.log("before t1 insert 3\n");
-//        insertRow(hf1, t1, 3, 0);
-//        Debug.log("after t1 insert 3\n");
-//
-//        Debug.log("before t2\n");
-//        Transaction t2 = new Transaction();
-//        t2.start();
-//        insertRow(hf2, t2, 21, 0);
-//        Database.getLogFile().logCheckpoint();
-//        insertRow(hf2, t2, 22, 0);
-//        t2.commit();
-//        Debug.log("after t2 commit\n");
-//
-//        Debug.log("before t1 insert 4\n");
-//        insertRow(hf1, t1, 4, 0);
-//        Debug.log("after t1 insert 4\n");
-//        
-//        Debug.log("before t1 abort\n");
-//        abort(t1);
-//        Debug.log("after t1 abort\n");
-//
-//        Transaction t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 2, true);
-//       // look(hf1, t, 3, false);
-//        look(hf1, t, 4, false);
-//        look(hf2, t, 21, true);
-//        look(hf2, t, 22, true);
-//        t.commit();
-//    }
-//
-//    @Test public void TestAbortCrash()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//        doInsert(hf1, 1, 2);
-//
-//        dontInsert(hf1, 4, -1);
-//
-//        Transaction t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 2, true);
-//        look(hf1, t, 3, false);
-//        look(hf1, t, 4, false);
-//        t.commit();
-//
-//        // *** Test:
-//        // crash and recover: data should still not be there
-//
-//        crash();
-//
-//        t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 2, true);
-//        look(hf1, t, 3, false);
-//        look(hf1, t, 4, false);
-//        t.commit();
-//    }
-//
-//    @Test public void TestCommitAbortCommitCrash()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//        doInsert(hf1, 1, 2);
-//
-//        // *** Test:
-//        // T1 inserts and commits
-//        // T2 inserts but aborts
-//        // T3 inserts and commit
-//        // only T1 and T3 data should be there
-//
-//        doInsert(hf1, 5, -1);
-//        dontInsert(hf1, 6, -1);
-//        doInsert(hf1, 7, -1);
-//
-//        Transaction t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 5, true);
-//        look(hf1, t, 6, false);
-//        look(hf1, t, 7, true);
-//        t.commit();
-//
-//        // *** Test:
-//        // crash: should not change visible data
-//
-//        crash();
-//
-//        t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 2, true);
-//        look(hf1, t, 3, false);
-//        look(hf1, t, 4, false);
-//        look(hf1, t, 5, true);
-//        look(hf1, t, 6, false);
-//        look(hf1, t, 7, true);
-//        t.commit();
-//    }
-//
-//    @Test public void TestOpenCrash()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//        doInsert(hf1, 1, 2);
-//
-//        // *** Test:
-//        // insert but no commit
-//        // crash
-//        // data should not be there
-//
-//        Transaction t = new Transaction();
-//        t.start();
-//        insertRow(hf1, t, 8, 0);
-//        Database.getBufferPool().flushAllPages(); // XXX something to UNDO
-//        insertRow(hf1, t, 9, 0);
-//
-//        crash();
-//
-//        t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 8, false);
-//        look(hf1, t, 9, false);
-//        t.commit();
-//    }
-//
-//    @Test public void TestOpenCommitOpenCrash()
-//            throws IOException, DbException, TransactionAbortedException {
-//        setup();
-//        doInsert(hf1, 1, 2);
-//
-//        // *** Test:
-//        // T1 inserts but does not commit
-//        // T2 inserts and commits
-//        // T3 inserts but does not commit
-//        // crash
-//        // only T2 data should be there
-//
-//        Transaction t1 = new Transaction();
-//        t1.start();
-//        insertRow(hf1, t1, 10, 0);
-//        Database.getBufferPool().flushAllPages(); // XXX defeat NO-STEAL-based abort
-//        insertRow(hf1, t1, 11, 0);
-//
-//        // T2 commits
-//        doInsert(hf2, 22, 23);
-//
-//        Transaction t3 = new Transaction();
-//        t3.start();
-//        insertRow(hf2, t3, 24, 0);
-//        Database.getBufferPool().flushAllPages(); // XXX defeat NO-STEAL-based abort
-//        insertRow(hf2, t3, 25, 0);
-//
-//        crash();
-//
-//        Transaction t = new Transaction();
-//        t.start();
-//        look(hf1, t, 1, true);
-//        look(hf1, t, 10, false);
-//        look(hf1, t, 11, false);
-//        look(hf2, t, 22, true);
-//        look(hf2, t, 23, true);
-//        look(hf2, t, 24, false);
-//        look(hf2, t, 25, false);
-//        t.commit();
-//    }
-//
+    @Test public void PatchTest()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+
+        // *** Test:
+        // check that BufferPool.flushPage() calls LogFile.logWrite().
+        doInsert(hf1, 1, 2);
+
+        if(Database.getLogFile().getTotalRecords() != 4)
+            throw new RuntimeException("LogTest: wrong # of log records; patch failed?");
+
+        // *** Test:
+        // check that BufferPool.transactionComplete(commit=true)
+        // called Page.setBeforeImage().
+        Transaction t1 = new Transaction();
+        t1.start();
+        Page p = Database.getBufferPool().getPage(t1.getId(),
+                                                  new HeapPageId(hf1.getId(), 0),
+                                                  Permissions.READ_ONLY);
+        
+        Page p1 = p.getBeforeImage();
+        
+        Debug.log("PatchTest!! now in buffer\n%s", ((HeapPage) p).toString(5));
+        Debug.log("PatchTest!! before image\n%s", ((HeapPage) p1).toString(5));
+        
+        Boolean same = Arrays.equals(p.getPageData(),
+                                     p1.getPageData());
+        if(same == false)
+            throw new RuntimeException("LogTest:setBeforeImage() not called? patch failed?");
+    }
+
+    @Test public void TestFlushAll()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+
+        // *** Test:
+        // check that flushAllPages writes the HeapFile
+        doInsert(hf1, 1, 2);
+
+        Transaction t1 = new Transaction();
+        t1.start();
+        HeapPage xp1 = (HeapPage) hf1.readPage(new HeapPageId(hf1.getId(), 0));
+        insertRow(hf1, t1, 3, 0);
+        Database.getBufferPool().flushAllPages();
+        HeapPage xp2 = (HeapPage) hf1.readPage(new HeapPageId(hf1.getId(), 0));
+
+        if(xp1.getNumEmptySlots() == xp2.getNumEmptySlots())
+            throw new RuntimeException("LogTest: flushAllPages() had no effect");
+    }
+
+    @Test public void TestCommitCrash()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+
+        // *** Test:
+        // insert, crash, recover: data should still be there
+
+        doInsert(hf1, 1, 2);
+
+        crash();
+
+        Transaction t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 2, true);
+        look(hf1, t, 3, false);
+        t.commit();
+    }
+
+    @Test public void TestAbort()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+        doInsert(hf1, 1, 2);
+
+        // *** Test:
+        // insert, abort: data should not be there
+        // flush pages directly to heap file to defeat NO-STEAL policy
+
+        dontInsert(hf1, 4, -1);
+
+        Transaction t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 2, true);
+        look(hf1, t, 3, false);
+        look(hf1, t, 4, false);
+        t.commit();
+    }
+
+    @Test public void TestAbortCommitInterleaved()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+        Debug.log("before doInsert\n");
+        doInsert(hf1, 1, 2);
+        Debug.log("after committing doInsert\n");
+        
+        // *** Test:
+        // T1 start, T2 start and commit, T1 abort
+
+        Transaction t1 = new Transaction();
+        t1.start();
+        Debug.log("before t1 insert 3\n");
+        insertRow(hf1, t1, 3, 0);
+        Debug.log("after t1 insert 3\n");
+
+        Debug.log("before t2\n");
+        Transaction t2 = new Transaction();
+        t2.start();
+        insertRow(hf2, t2, 21, 0);
+        Database.getLogFile().logCheckpoint();
+        insertRow(hf2, t2, 22, 0);
+        t2.commit();
+        Debug.log("after t2 commit\n");
+
+        Debug.log("before t1 insert 4\n");
+        insertRow(hf1, t1, 4, 0);
+        Debug.log("after t1 insert 4\n");
+        
+        Debug.log("before t1 abort\n");
+        abort(t1);
+        Debug.log("after t1 abort\n");
+
+        Transaction t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 2, true);
+       // look(hf1, t, 3, false);
+        look(hf1, t, 4, false);
+        look(hf2, t, 21, true);
+        look(hf2, t, 22, true);
+        t.commit();
+    }
+
+    @Test public void TestAbortCrash()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+        doInsert(hf1, 1, 2);
+
+        dontInsert(hf1, 4, -1);
+
+        Transaction t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 2, true);
+        look(hf1, t, 3, false);
+        look(hf1, t, 4, false);
+        t.commit();
+
+        // *** Test:
+        // crash and recover: data should still not be there
+
+        crash();
+
+        t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 2, true);
+        look(hf1, t, 3, false);
+        look(hf1, t, 4, false);
+        t.commit();
+    }
+
+    @Test public void TestCommitAbortCommitCrash()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+        doInsert(hf1, 1, 2);
+
+        // *** Test:
+        // T1 inserts and commits
+        // T2 inserts but aborts
+        // T3 inserts and commit
+        // only T1 and T3 data should be there
+
+        doInsert(hf1, 5, -1);
+        dontInsert(hf1, 6, -1);
+        doInsert(hf1, 7, -1);
+
+        Transaction t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 5, true);
+        look(hf1, t, 6, false);
+        look(hf1, t, 7, true);
+        t.commit();
+
+        // *** Test:
+        // crash: should not change visible data
+
+        crash();
+
+        t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 2, true);
+        look(hf1, t, 3, false);
+        look(hf1, t, 4, false);
+        look(hf1, t, 5, true);
+        look(hf1, t, 6, false);
+        look(hf1, t, 7, true);
+        t.commit();
+    }
+
+    @Test public void TestOpenCrash()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+        doInsert(hf1, 1, 2);
+
+        // *** Test:
+        // insert but no commit
+        // crash
+        // data should not be there
+
+        Transaction t = new Transaction();
+        t.start();
+        insertRow(hf1, t, 8, 0);
+        Database.getBufferPool().flushAllPages(); // XXX something to UNDO
+        insertRow(hf1, t, 9, 0);
+
+        crash();
+
+        t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 8, false);
+        look(hf1, t, 9, false);
+        t.commit();
+    }
+
+    @Test public void TestOpenCommitOpenCrash()
+            throws IOException, DbException, TransactionAbortedException {
+        setup();
+        doInsert(hf1, 1, 2);
+
+        // *** Test:
+        // T1 inserts but does not commit
+        // T2 inserts and commits
+        // T3 inserts but does not commit
+        // crash
+        // only T2 data should be there
+
+        Transaction t1 = new Transaction();
+        t1.start();
+        insertRow(hf1, t1, 10, 0);
+        Database.getBufferPool().flushAllPages(); // XXX defeat NO-STEAL-based abort
+        insertRow(hf1, t1, 11, 0);
+
+        // T2 commits
+        doInsert(hf2, 22, 23);
+
+        Transaction t3 = new Transaction();
+        t3.start();
+        insertRow(hf2, t3, 24, 0);
+        Database.getBufferPool().flushAllPages(); // XXX defeat NO-STEAL-based abort
+        insertRow(hf2, t3, 25, 0);
+
+        crash();
+
+        Transaction t = new Transaction();
+        t.start();
+        look(hf1, t, 1, true);
+        look(hf1, t, 10, false);
+        look(hf1, t, 11, false);
+        look(hf2, t, 22, true);
+        look(hf2, t, 23, true);
+        look(hf2, t, 24, false);
+        look(hf2, t, 25, false);
+        t.commit();
+    }
+
     @Test public void TestOpenCommitCheckpointOpenCrash()
             throws IOException, DbException, TransactionAbortedException {
+    	Debug.close();
         setup();
         doInsert(hf1, 1, 2);
 
@@ -493,7 +494,6 @@ public class LogTest extends DeerBaseTestBase {
         insertRow(hf2, t11, 29, 0);
         
         t10.commit();
-        t6.commit();
         
         crash();
 
@@ -503,7 +503,7 @@ public class LogTest extends DeerBaseTestBase {
         look(hf1, t, 12, false);
         look(hf1, t, 13, false);
         look(hf2, t, 22, true);
-        look(hf3, t, 23, true);
+        look(hf3, t, 23, false);
         look(hf2, t, 23, false);
         look(hf2, t, 24, true);
         look(hf2, t, 25, true);

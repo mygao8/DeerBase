@@ -294,7 +294,7 @@ public class BufferPool {
 				        */
 				        
 						Debug.log("set before image %d for page%s, dirtier: txn%d", 
-								((HeapPage)page).oldData.hashCode(), pid, tid.getId());
+								((HeapPage)page).oldData.hashCode(), pid, page.getDirtier());
 						// }
     				} catch (IOException e) {
     					e.printStackTrace();
