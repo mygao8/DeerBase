@@ -31,16 +31,16 @@ public class BufferPool {
     /** NOTE: IF MAX_TIMEOUT == MIN_TIMEOU, timeout will be fixed 
      * IF MAX_TIMEOUT > MIN_TIMEOUT, timeout will be uniformly distributed in [MIN_TIMEOUT, MAX_TIMEOUT]*/
     
-    /** Max timeout for a deadlock to abort. Unit: 10ms
-     * i.e. MaxTimeOut = 100, max timeout time = 100*10ms = 1s */
-    public static final int MAX_TIMEOUT = 600;
+    /** Max timeout for a deadlock to abort. Unit: ms
+     * i.e. MaxTimeOut = 1000, max timeout time = 1000ms = 1s */
+    public static final int MAX_TIMEOUT = 1500;
     
-    /** Min timeout for a deadlock to abort. Unit: 10ms
-     * i.e. MinTimeOut = 100, min timeout time = 100*10ms = 1s */
-    public static final int MIN_TIMEOUT = 400;
+    /** Min timeout for a deadlock to abort. Unit: ms
+     * i.e. MinTimeOut = 1000, min timeout time = 1000ms = 1s */
+    public static final int MIN_TIMEOUT = 1200;
     
     /** If a transaction failed to acquire desired lock, 
-     * if will retry after RETRY_INTERVAL Unit: ms */
+     * if will retry for each RETRY_INTERVAL Unit: ms */
     public static final int RETRY_INTERVAL = 10;
     
     /** Default ratio of loading a full table into buffer pool, which equals
@@ -428,7 +428,7 @@ public class BufferPool {
     	DbFile tableFile = Database.getCatalog().getDbFile(pid.getTableId());
     	Page flushedPage = cache.get(pid);
     	
-    	Debug.log("flush Page in BufferPool %s %s\n", pid.toString(), Debug.stackTrace());
+    	//Debug.log("flush Page in BufferPool %s %s\n", pid.toString(), Debug.stackTrace());
     	
     	/**
     	 * Ref: https://courses.cs.washington.edu/courses/cse444/15sp/labs/lab5/lab5.html
@@ -471,8 +471,9 @@ public class BufferPool {
         cache.
     */
     public synchronized void discardPage(PageId pid) {
-    	cache.remove(pid);
-    	numUsedPages--;
+    	if (cache.remove(pid) != null) {
+    		numUsedPages--;
+    	}
     }
     
     /**

@@ -20,7 +20,7 @@ public class Debug {
       String debug = System.getProperty("deerBase.Debug");
       if (debug == null) {
           // No system property = disabled
-          DEBUG_LEVEL = 2; // -1 to close all
+          DEBUG_LEVEL = -1; // -1 to close all
       } else if (debug == "") {
           // Empty property = level 0
           DEBUG_LEVEL = 0;

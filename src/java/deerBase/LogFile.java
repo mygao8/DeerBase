@@ -76,7 +76,7 @@ for each active transaction.
 
 public class LogFile {
 
-	private final static int LogFileDebugLevel = Debug.CLOSE;
+	private final static int LogFileDebugLevel = Debug.DEER_BASE;
 	
     File logFile;
     RandomAccessFile raf;
@@ -184,6 +184,7 @@ public class LogFile {
                 tidToFirstLogRecord.remove(tid.getId());
                 
                 // print log
+                Debug.log(LogFileDebugLevel, "after rollback, abort " + tid.getId());
                 print(5);
             }
         }
@@ -207,6 +208,7 @@ public class LogFile {
         tidToFirstLogRecord.remove(tid.getId());
         
         // print log
+        Debug.log(LogFileDebugLevel, "after commit" + tid.getId());
         print(5);
     }
 
@@ -547,15 +549,12 @@ public class LogFile {
                 // start from the begin record of tid
                 long beginOffset = tidToFirstLogRecord.get(tid.getId());              
                 // skip begin record
-                raf.seek(beginOffset);    
-                
+                raf.seek(beginOffset);              
                 Debug.log(LogFileDebugLevel, "Roolback: set file ptr for txn%d, offset:%d, ptr:%d\n", 
-                		tid.getId(), beginOffset, raf.getFilePointer());
-                long tmptid = 0;
-                Debug.log(LogFileDebugLevel, "Roolback: other txns offset. txn0:%d, txn1:%d, txn2:%d, txn3::%d",
-                		tidToFirstLogRecord.get(tmptid), tidToFirstLogRecord.get(tmptid+1), 
-                		tidToFirstLogRecord.get(tmptid+2), tidToFirstLogRecord.get(tmptid+3));
+                		tid.getId(), beginOffset, raf.getFilePointer());                
                 
+                Debug.log(LogFileDebugLevel, "before rollback");
+                print(5);
                 
                 int numUpdate = 0;
                 while (true) {
@@ -564,6 +563,8 @@ public class LogFile {
                 	long offset;
                 	try {
                 		 offset = raf.getFilePointer();
+                		 if (offset >= raf.length()) break;
+                		 
                     	 type = raf.readInt();
                     	 tidLong = raf.readLong();
                     	 Debug.log(LogFileDebugLevel, "Rollback: read log [offset%d type:%d, tid%d]\n", 
@@ -573,7 +574,7 @@ public class LogFile {
                     	Debug.log(LogFileDebugLevel, "Reach EOF when roll back txn%d\n", tid.getId());
                     	break;
     				}
-                	if (offset > raf.length()) break;
+                	
 	                if (tidLong == tid.getId() && type == UPDATE_RECORD) {
 	                	// undo for Update record
 	                	numUpdate++;
@@ -589,6 +590,7 @@ public class LogFile {
 							Debug.log(LogFileDebugLevel, "Rollback: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
 									beforeImage.getId().toString(), tmpOffset, tidLong);
 							dbFile.writePage(beforeImage);
+							Database.getBufferPool().discardPage(beforeImage.getId());
 						}
 
 						Debug.log(LogFileDebugLevel, "Rollback: \n");
@@ -712,6 +714,7 @@ public class LogFile {
     public void recover() throws IOException {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
+            	Debug.log(LogFileDebugLevel, "before recover");
             	print(5);
             	
                 recoveryUndecided = false;
@@ -959,9 +962,7 @@ public class LogFile {
                  		}
                  	}
                 }
-                                
                 
-                print(5);
                 // finally, undo the remaining txns.
                 // all txns in map: with latest update, update but not commit after checkpoint
                 latestUpdateMap.forEach((tid, latestUpdateOffset) -> {

@@ -428,17 +428,17 @@ public class LockManager {
     
     public void debug(TransactionId tid, PageId pid, String s) {
     	if (debug == 1 && !foreverCloseDebug)
-    		System.out.println("Tid:"+tid+" Pid:"+pid+" "+s);
+    		Debug.log("Tid:"+tid+" Pid:"+pid+" "+s);
     }
     
     public void debug(Lock lock, String s) {
     	if (debug == 1 && !foreverCloseDebug)
-    		System.out.println(lock + " " + s);
+    		Debug.log(lock + " " + s);
     }
     
     public void debug(String s) {
     	if (debug == 1 && !foreverCloseDebug)
-    		System.out.println(s);
+    		Debug.log(s);
     }
     
     public void openDebug() {

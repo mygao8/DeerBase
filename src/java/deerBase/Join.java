@@ -393,8 +393,8 @@ public class Join extends Operator {
         	String line;
         	if ((line = adFile.readLine()) != null) {
         		byte[] tmp = line.getBytes();
-        		System.out.println(line + " " + td.toString());
-        		System.out.println(tmp.length + "	" + tupleSize);
+        		Debug.log(line + " " + td.toString());
+        		Debug.log(tmp.length + "	" + tupleSize);
             	for (int j = 0; j < tupleSize; j++) {
             		buffer[i*tupleSize + j] = tmp[j];
             	}
@@ -436,7 +436,7 @@ public class Join extends Operator {
         int numTuple = 0;
         while (child.hasNext()){
             buffer[numTuple++] = child.next();
-            System.out.println(buffer[numTuple-1].toString());
+            Debug.log(buffer[numTuple-1].toString());
 
             // buffer is full
             if (numTuple == buffer.length) {

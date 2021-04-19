@@ -100,7 +100,7 @@ public class DeerBase {
             System.exit(1);
         }
         
-        System.out.println(getThreadDump());
+        //System.out.println(getThreadDump());
     }
     
     // ref: https://codedelay.com/how-to-detect-and-avoid-deadlock-in-java-with-example/

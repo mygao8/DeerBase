@@ -113,7 +113,7 @@ public class Query implements Serializable {
             System.out.println(tup);
             cnt++;
         }
-        System.out.println("\n " + cnt + " rows.");
+        System.out.println("\n" + cnt + " rows.");
         this.close();
     }
 }
