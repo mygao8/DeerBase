@@ -518,16 +518,21 @@ public class LogFile {
         Debug.log(LogFileDebugLevel, "after rewrite");
         print(5);
     }
-
+    
+    public void rollback(TransactionId tid) 
+    		throws NoSuchElementException, IOException {
+    	rollback(tid.getId());
+    }
+    
     /** Rollback the specified transaction, setting the state of any
-        of pages it updated to their pre-updated state.  To preserve
-        transaction semantics, this should not be called on
-        transactions that have already committed (though this may not
-        be enforced by this method.)
+    of pages it updated to their pre-updated state.  To preserve
+    transaction semantics, this should not be called on
+    transactions that have already committed (though this may not
+    be enforced by this method.)
 
-        @param tid The transaction to rollback
+    @param tid The transaction to rollback
     */
-    public void rollback(TransactionId tid)
+    public void rollback(Long tid)
         throws NoSuchElementException, IOException {
         synchronized (Database.getBufferPool()) {
             synchronized(this) {
@@ -546,17 +551,21 @@ public class LogFile {
                 // 
                 // startOffsetLong
                 
+                long filePtrBeforeRollback = raf.getFilePointer();
+                
                 // start from the begin record of tid
-                long beginOffset = tidToFirstLogRecord.get(tid.getId());              
+                long beginOffset = tidToFirstLogRecord.get(tid);              
                 // skip begin record
                 raf.seek(beginOffset);              
                 Debug.log(LogFileDebugLevel, "Roolback: set file ptr for txn%d, offset:%d, ptr:%d\n", 
-                		tid.getId(), beginOffset, raf.getFilePointer());                
+                		tid, beginOffset, raf.getFilePointer());                
                 
                 Debug.log(LogFileDebugLevel, "before rollback");
                 print(5);
                 
-                int numUpdate = 0;
+                // for each affected page in this rollbacked txn, the before images of
+                // all associated UPDATE records are the same. So only rollback the first one of them
+                HashSet<PageId> alreadyRollbackedPageIds = new HashSet<>();
                 while (true) {
                 	int type;
                 	long tidLong;
@@ -571,36 +580,36 @@ public class LogFile {
                     			 offset, type, tidLong);
                 	}
                     catch (EOFException e) {                
-                    	Debug.log(LogFileDebugLevel, "Reach EOF when roll back txn%d\n", tid.getId());
+                    	Debug.log(LogFileDebugLevel, "Reach EOF when roll back txn%d\n", tid);
                     	break;
     				}
                 	
-	                if (tidLong == tid.getId() && type == UPDATE_RECORD) {
+	                if (tidLong == tid && type == UPDATE_RECORD) {
 	                	// undo for Update record
-	                	numUpdate++;
 	                	
 						Page beforeImage = readPageData(raf);
 						// skip after image
 						Page afterImage = readPageData(raf);
 						long tmpOffset = raf.readLong();
 						
-						int tableId = beforeImage.getId().getTableId();
-						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
-						if (numUpdate == 1) {
-							Debug.log(LogFileDebugLevel, "Rollback: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
-									beforeImage.getId().toString(), tmpOffset, tidLong);
-							dbFile.writePage(beforeImage);
-							Database.getBufferPool().discardPage(beforeImage.getId());
-						}
-
 						Debug.log(LogFileDebugLevel, "Rollback: \n");
 						Debug.log(LogFileDebugLevel, "Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
 						Debug.log(LogFileDebugLevel, "After image:\n%s\n", ((HeapPage) afterImage).toString(5));
 						
-						// restore raf pointer??
-						Database.getBufferPool().discardPage(beforeImage.getId());
-						tidToFirstLogRecord.remove(tid.getId());
-						break;	
+						PageId pid = beforeImage.getId();
+						// only rollback the affected page when ecounter at the first time
+						if (!alreadyRollbackedPageIds.contains(pid)) {
+							alreadyRollbackedPageIds.add(pid);
+							
+							DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
+							Debug.log(LogFileDebugLevel, "Rollback: undo update with page%s, log (Offset %d: UPDATE [tid%d]\n)", 
+									beforeImage.getId().toString(), tmpOffset, tidLong);
+							dbFile.writePage(beforeImage);
+							Database.getBufferPool().discardPage(beforeImage.getId());
+						} else {
+							Debug.log(LogFileDebugLevel, "Rollback: already rollbacked this page before, log (Offset %d: UPDATE [tid%d]\n)", 
+									beforeImage.getId().toString(), tmpOffset, tidLong);
+						}
 	                }
 	                else {
 	                	// skip according to record type
@@ -655,8 +664,9 @@ public class LogFile {
 	                }
                 }
                 
+                tidToFirstLogRecord.remove(tid);
                 // don't forget to recover the offset for future write log
-                raf.seek(currentOffset);
+                raf.seek(filePtrBeforeRollback);
             }
         }
     }
@@ -702,16 +712,234 @@ public class LogFile {
             e.printStackTrace();
         }
     }
+    
+    /** Recover the database system by ensuring that the updates of
+    committed transactions are installed and that the
+    updates of uncommitted transactions are not installed.
+    */
+    public void recover() throws IOException {
+        synchronized (Database.getBufferPool()) {
+            synchronized (this) {
+            	Debug.log(LogFileDebugLevel, "before recover");
+            	print(5);
+            	
+                recoveryUndecided = false;
+                // some code goes here
+                        
+                HashSet<Long> toUndoTxns = new HashSet<>();
+                
+                raf.seek(0);
+                final long checkPointOffset = raf.readLong();
+                
+                // the possible least offset where undo should end
+                // if there is outstanding txn, it is min(begin offset of outstanding txn)
+                // otherwise, it is the first update offset when scanning from the beginning of log file
+                Long undoEndOffset = null;
+                if (checkPointOffset != -1) {
+                	raf.seek(checkPointOffset);
+                
+	                // Log Record:
+	                // typeInt, tidLong
+	                // 
+	                // UPDATE: before image, after image
+	                // image: pageUTF, pidUTF (utfLenShort, [byte, byte, ..])
+	                // pageInfoLenInt, [int, int, ..]
+	                // pageDataLenInt, [byte, byte, ..]
+	                // 
+	                // CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+	                // 
+	                // startOffsetLong
+                	
+	                int type = raf.readInt();
+	                long tid = raf.readLong();
+	                long recordPos;
+	                if (type != CHECKPOINT_RECORD || tid != -1) {
+	                	Debug.log(LogFileDebugLevel, "Recover: checkPointOffset ERROR, Offset:%d [type%d, tid%d]", checkPointOffset, type, tid);
+	                	return;
+	                }	                
+	                
+	                // mark outstanding txns as losers initially
+	                int numTxns = raf.readInt();
+	                // outstanding txns (tidLong, beginOffsetLong)
+					long[][] outstandingTxns = new long[numTxns][2];
+					for (int i = 0; i < numTxns; i++) {
+						outstandingTxns[i][0] = raf.readLong();
+						outstandingTxns[i][1] = raf.readLong();
+						
+						if (undoEndOffset == null) {
+							undoEndOffset = outstandingTxns[i][1];
+						} else {
+							undoEndOffset = Math.min(undoEndOffset, outstandingTxns[i][1]);
+						}
+						
+						toUndoTxns.add(outstandingTxns[i][0]);
+						
+						// only used for ABORT to call rollback()
+						tidToFirstLogRecord.put(outstandingTxns[i][0], outstandingTxns[i][1]);
+					}
+					
+					recordPos = raf.readLong();
+					Debug.log(LogFileDebugLevel, "Recover: Offset %d: CHECKPOINT  [tid%d]\n", recordPos, tid);
+					for (int i = 0; i < numTxns; i++) {
+						Debug.log(LogFileDebugLevel, "Recover: outstanding txn: [tid%d, offset:%d]\n", outstandingTxns[i][0], outstandingTxns[i][1]);
+					}
+                }
+				
+                
+                while (true) {
+                	int type;
+                	long tid, recordPos;
+                	try {
+                		 recordPos = raf.getFilePointer();
+                		 if (recordPos >= raf.length()) break;
+                		 
+                    	 type = raf.readInt();
+                    	 tid = raf.readLong();
+                    	 Debug.log(LogFileDebugLevel, "Recover: read log [offset%d type:%d, tid%d]\n", 
+                    			 recordPos, type, tid);
+                	}
+                    catch (EOFException e) {                
+                    	Debug.log(LogFileDebugLevel, "Reach EOF when recover\n");
+                    	break;
+    				}                	
+                	
+                	// skip according to record type
+                	int bytesSkipped;
+                	switch (type) {
+					case BEGIN_RECORD:
+						// No need to store. If only begin without update, no redo / undo.	
+						tidToFirstLogRecord.put(tid, recordPos);
+						
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case COMMIT_RECORD:						
+						toUndoTxns.remove(tid);					
+						
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case ABORT_RECORD:
+						// must rollback immediately
+						// otherwise, should treat as loser and undo
+						
+						// in the case: on the same page: abort, commit. 
+						// When undo abort will overwrite the commit
+						rollback(tid);
+						toUndoTxns.remove(tid);
+						
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case UPDATE_RECORD:
+						if (undoEndOffset == null) {
+							undoEndOffset = recordPos;
+						}
+						
+						toUndoTxns.add(tid);
+						// skip before image
+						Page beforeImage = readPageData(raf);
+						// redo, no matter it is loser or not
+						Page afterImage = readPageData(raf);
+						int tableId = afterImage.getId().getTableId();
+						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+						Debug.log(LogFileDebugLevel, "Recover: redo update with page%s, log (Offset %d: UPDATE [tid%d]), because encounter COMMIT after checkpoint", 
+								afterImage.getId().toString(), recordPos, tid);
+						dbFile.writePage(afterImage);
+
+						Debug.log(LogFileDebugLevel, "Recover: \n");
+						Debug.log(LogFileDebugLevel, "Before image:\n%s\n", ((HeapPage) beforeImage).toString(5));
+						Debug.log(LogFileDebugLevel, "After image:\n%s\n", ((HeapPage) afterImage).toString(5));
+						
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					case CHECKPOINT_RECORD:
+						// Should be impossible, we started from the last checkpoint
+						Debug.log(LogFileDebugLevel, "Recover: ERROR, find newer checkpoint");
+						// CHECKPOINT: numTxnsInt, [(tidLong, 1stOffsetLong)]
+						
+						int numTxns = raf.readInt();
+						// outstanding txns (tidLong, 1stOffsetLong)
+						int toSkip = (LONG_SIZE * 2) * numTxns;
+						bytesSkipped = raf.skipBytes(toSkip);
+						if (bytesSkipped != toSkip) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						
+						bytesSkipped = raf.skipBytes(RECORD_END_SIZE);
+						if (bytesSkipped != RECORD_END_SIZE) {
+							throw new IIOException("EOF: " + raf.getFilePointer());
+						}
+						break;
+					}
+                }
+                
+                if (undoEndOffset == null) {
+                	undoEndOffset = (long) FIRST_RECORD_OFFSET;
+                }
+                
+                // backward from end of log file, until undoEndOffset
+                long curRecordOffset = raf.length();
+                while (curRecordOffset > undoEndOffset) {   	
+                	raf.seek(curRecordOffset-LONG_SIZE);
+                	// beginning of current record
+                	curRecordOffset = raf.readLong();
+                	if (curRecordOffset < FIRST_RECORD_OFFSET) {
+                		Debug.log(LogFileDebugLevel, "Recover ERROR: reach the begining of print log, but there is still outstanding txns");
+                		break;
+                	}
+                	
+                	raf.seek(curRecordOffset);
+                	
+                	int type;
+                	long tid;
+                 	try {
+                     	 type = raf.readInt();
+                     	 tid = raf.readLong();
+                 	}
+                    catch (EOFException e) {                
+        	         	Debug.log(LogFileDebugLevel, "Reach EOF when read log\n");
+        	         	break;
+        			}
+                 	
+                 	if (type == UPDATE_RECORD && toUndoTxns.contains(tid)) {
+                 		// undo
+                 		Page beforeImage = readPageData(raf);
+        				
+        				int tableId = beforeImage.getId().getTableId();
+						DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+						Debug.log(LogFileDebugLevel, "Recover: undo update with page%s, log (Offset %d: UPDATE [tid%d]), because encounter UPDATE when backforward", 
+								beforeImage.getId().toString(), curRecordOffset, tid);
+						dbFile.writePage(beforeImage);
+                 	}
+                }
+                
+                // restore some class fields that should not be used in recover phase
+                currentOffset = -1;
+                tidToFirstLogRecord.clear();
+                
+                // set current offset
+                raf.seek(raf.length());
+                currentOffset = raf.getFilePointer();
+                force(raf);
+            }
+         }
+    }
 
     // NOTE: the before image of each update record of a txn will be the same
     // because the before image is set when the last txn committed
     // and during the current txn, if a update exists, current txn holds XLock
     // no other txns can update a page that current txn already updated
-    /** Recover the database system by ensuring that the updates of
-        committed transactions are installed and that the
-        updates of uncommitted transactions are not installed.
-    */
-    public void recover() throws IOException {
+    public void recoverTxnsWithOneAffectedPage() throws IOException {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
             	Debug.log(LogFileDebugLevel, "before recover");
